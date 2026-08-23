@@ -85,14 +85,20 @@ class TensorBlockDescriptor(ctypes.Structure):
 
     def is_valid(self) -> bool:
         """Return ``True`` if the magic sentinel matches ``0x4B414348``."""
-        return self.magic == TENSOR_DESCRIPTOR_MAGIC
+        return bool(self.magic == TENSOR_DESCRIPTOR_MAGIC)
 
     def compute_shape(self) -> tuple[int, int, int, int, int]:
         """Return the 5D tensor shape: ``(2, num_layers, num_heads, block_size, head_dim)``.
 
         The leading dimension ``2`` represents Key and Value tensors.
         """
-        return (2, self.num_layers, self.num_heads, self.block_size, self.head_dim)
+        return (
+            2,
+            int(self.num_layers),
+            int(self.num_heads),
+            int(self.block_size),
+            int(self.head_dim),
+        )
 
     @classmethod
     def from_bytes(cls, source: bytes) -> TensorBlockDescriptor:
@@ -105,4 +111,6 @@ class TensorBlockDescriptor(ctypes.Structure):
         """
         if len(source) < 64:
             raise ValueError(f"Descriptor requires 64 bytes, got {len(source)}")
-        return ctypes.Structure.__class__.from_buffer_copy(cls, source[:64])  # type: ignore[arg-type]
+        obj = cls()
+        ctypes.memmove(ctypes.byref(obj), source[:64], 64)
+        return obj

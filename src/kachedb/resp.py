@@ -12,9 +12,13 @@ server's ``READ_BUF_SIZE``), not byte-by-byte.
 
 from __future__ import annotations
 
-from typing import Union
+from typing import TYPE_CHECKING, Union
 
 from .exceptions import ProtocolError, ResponseError
+
+if TYPE_CHECKING:
+    import asyncio
+    import socket
 
 # Type alias for decoded RESP values.
 RespValue = Union[str, bytes, int, list["RespValue"], None]  # noqa: UP007
@@ -63,7 +67,7 @@ class RespReader:
 
     __slots__ = ("_buf", "_chunk_size", "_pos", "_sock")
 
-    def __init__(self, sock: socket.socket, chunk_size: int = _READ_CHUNK_SIZE) -> None:  # noqa: F821
+    def __init__(self, sock: socket.socket, chunk_size: int = _READ_CHUNK_SIZE) -> None:
         self._sock = sock
         self._buf = bytearray()
         self._pos = 0
@@ -168,7 +172,7 @@ class AsyncRespReader:
 
     def __init__(
         self,
-        reader: asyncio.StreamReader,  # noqa: F821
+        reader: asyncio.StreamReader,
         chunk_size: int = _READ_CHUNK_SIZE,
     ) -> None:
         self._reader = reader
