@@ -1,0 +1,90 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "kachedb"
+dynamic = ["version"]
+description = "High-performance Python client for KacheDB — the zero-copy Redis-compatible & LLM KV-cache storage engine"
+readme = "README.md"
+license = "Apache-2.0 OR MIT"
+requires-python = ">=3.10"
+authors = [{ name = "KacheDB Core Team" }]
+keywords = ["kachedb", "cache", "redis", "kv-cache", "llm", "tensor", "zero-copy", "vllm"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Database",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+dependencies = [
+    "numpy>=1.24",
+]
+
+[project.optional-dependencies]
+torch = ["torch>=2.0"]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "mypy>=1.0",
+    "ruff>=0.4",
+]
+
+[project.urls]
+Homepage = "https://github.com/vubon/kachedb-py"
+Repository = "https://github.com/vubon/kachedb-py"
+Documentation = "https://github.com/vubon/kachedb-py#readme"
+"Bug Tracker" = "https://github.com/vubon/kachedb-py/issues"
+"KacheDB Server" = "https://github.com/vubon/kachedb"
+
+[tool.hatch.version]
+path = "src/kachedb/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/kachedb"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "N",    # pep8-naming
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "TCH",  # flake8-type-checking
+    "RUF",  # ruff-specific
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["kachedb"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "integration: marks tests that require a running KacheDB server",
+]
