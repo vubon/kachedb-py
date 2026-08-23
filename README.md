@@ -128,30 +128,30 @@ All commands follow the [KacheDB RESP2/RESP3 wire protocol](https://github.com/v
 
 ## 🏗️ Architecture
 
-```
+```text
 ┌──────────────────────────────────────────────────────────┐
-│                    Your Python App                        │
-│            (vLLM / SGLang / FastAPI / etc.)               │
+│                     Your Python App                      │
+│             (vLLM / SGLang / FastAPI / etc.)             │
 ├──────────────────────────────────────────────────────────┤
-│                   kachedb Python SDK                      │
-│  ┌─────────────┐  ┌──────────────┐  ┌────────────────┐  │
-│  │ KacheClient  │  │ AsyncKache   │  │ Pipeline       │  │
-│  │ (sync TCP)   │  │ Client       │  │ Batching       │  │
+│                   kachedb Python SDK                     │
+│  ┌──────────────┐  ┌──────────────┐  ┌────────────────┐  │
+│  │ KacheClient  │  │  AsyncKache  │  │    Pipeline    │  │
+│  │  (sync TCP)  │  │    Client    │  │    Batching    │  │
 │  └──────┬───────┘  └──────┬───────┘  └───────┬────────┘  │
-│         │                 │                   │           │
-│  ┌──────┴─────────────────┴───────────────────┴────────┐ │
-│  │              RESP2/RESP3 Protocol Engine             │ │
-│  │         (64KB buffered encoder + decoder)            │ │
-│  └──────────────────────┬──────────────────────────────┘ │
-│                         │                                 │
-│  ┌──────────────────────┴──────────────────────────────┐ │
-│  │          ConnectionPool / AsyncConnectionPool        │ │
-│  │     (Thread-safe / asyncio.Queue, health checks)     │ │
-│  └──────────────────────┬──────────────────────────────┘ │
-├──────────────────────────┼───────────────────────────────┤
-│                    TCP + /dev/shm                         │
-├──────────────────────────┼───────────────────────────────┤
-│                  KacheDB Server (Rust)                    │
+│         │                 │                  │           │
+│  ┌──────┴─────────────────┴──────────────────┴────────┐  │
+│  │            RESP2/RESP3 Protocol Engine             │  │
+│  │         (64KB buffered encoder + decoder)          │  │
+│  └──────────────────────┬─────────────────────────────┘  │
+│                         │                                │
+│  ┌──────────────────────┴─────────────────────────────┐  │
+│  │        ConnectionPool / AsyncConnectionPool        │  │
+│  │    (Thread-safe / asyncio.Queue, health checks)    │  │
+│  └──────────────────────┬─────────────────────────────┘  │
+├─────────────────────────┼────────────────────────────────┤
+│                   TCP + /dev/shm                         │
+├──────────────────────────────────────────────────────────┤
+│                  KacheDB Server (Rust)                   │
 │         io_uring / kqueue │ POSIX SHM │ Megaslab         │
 └──────────────────────────────────────────────────────────┘
 ```
