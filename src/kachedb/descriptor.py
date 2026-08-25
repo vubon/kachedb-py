@@ -100,6 +100,10 @@ class TensorBlockDescriptor(ctypes.Structure):
             int(self.head_dim),
         )
 
+    def to_bytes(self) -> bytes:
+        """Serialize the 64-byte descriptor to raw bytes."""
+        return bytes(self)
+
     @classmethod
     def from_bytes(cls, source: bytes) -> TensorBlockDescriptor:
         """Construct a descriptor from a 64-byte buffer.
