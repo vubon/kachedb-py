@@ -34,6 +34,8 @@ dependencies = [
 
 [project.optional-dependencies]
 torch = ["torch>=2.0"]
+vllm = ["torch>=2.0", "vllm>=0.6.0"]
+all = ["torch>=2.0", "vllm>=0.6.0"]
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",

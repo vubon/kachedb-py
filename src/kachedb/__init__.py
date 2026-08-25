@@ -39,6 +39,7 @@ from .exceptions import (
 from .pipeline import AsyncPipeline, Pipeline
 from .pool import AsyncConnectionPool, ConnectionPool
 from .tensor import attach_shm, detach_all, read_tensor, read_torch_tensor
+from .vllm import KacheDBConnector, KacheDBMemoryManager, KacheDBPrefixCache
 
 __all__ = [
     "TENSOR_DESCRIPTOR_MAGIC",
@@ -68,4 +69,8 @@ __all__ = [
     "detach_all",
     "read_tensor",
     "read_torch_tensor",
+    # vLLM Integration
+    "KacheDBConnector",
+    "KacheDBMemoryManager",
+    "KacheDBPrefixCache",
 ]

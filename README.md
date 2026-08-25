@@ -172,6 +172,33 @@ client = KacheClient(
 )
 ```
 
+## 🔌 vLLM KV-Cache Acceleration
+
+KacheDB provides a plug-and-play connector for the **vLLM distributed inference engine** to accelerate prompt prefill and bypass redundant attention computation via zero-copy POSIX shared memory (`/dev/shm`):
+
+### 1. Launch with vLLM CLI:
+
+```bash
+vllm serve meta-llama/Meta-Llama-3-8B-Instruct \
+  --kv-transfer-config '{"kv_connector": "kachedb.vllm.KacheDBConnector", "kv_role": "kv_both"}'
+```
+
+### 2. Programmatic Usage in Custom Engines:
+
+```python
+from kachedb.vllm import KacheDBConnector
+
+# Initialize connector for worker rank
+connector = KacheDBConnector(rank=0, local_rank=0, block_size=16)
+
+# Restore cached prefix blocks directly into GPU PagedAttention buffers
+matched_states, is_hit = connector.recv_kv_caches_and_hidden_states(
+    model_executable=model,
+    model_input=model_input,
+    kv_caches=gpu_kv_caches,
+)
+```
+
 ## 🧪 Development
 
 ```bash
