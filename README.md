@@ -19,10 +19,22 @@
 pip install kachedb
 ```
 
-With PyTorch tensor support:
+With **PyTorch** tensor zero-copy support:
 
 ```bash
-pip install kachedb[torch]
+pip install "kachedb[torch]"
+```
+
+With **vLLM** KV-cache acceleration plugin:
+
+```bash
+pip install "kachedb[vllm]"
+```
+
+Or install all extras:
+
+```bash
+pip install "kachedb[all]"
 ```
 
 ## 🚀 Quickstart
