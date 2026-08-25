@@ -1,0 +1,28 @@
+name: "🚀 Feature Request / Proposal"
+description: "Suggest a new feature or improvement for kachedb-py"
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: "Have an idea for `kachedb-py`? We'd love to hear it!"
+  - type: textarea
+    id: problem
+    attributes:
+      label: "Problem or Use Case"
+      description: "Is your feature request related to a problem or a specific LLM framework?"
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: "Proposed Solution"
+      description: "A clear and concise description of what you want to happen."
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: "Alternative Solutions"
+      description: "Any alternative solutions or features you've considered."
+    validations:
+      required: false

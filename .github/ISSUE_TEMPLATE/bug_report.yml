@@ -1,0 +1,40 @@
+name: "🐛 Bug Report"
+description: "File a bug report for kachedb-py"
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: "Thanks for taking the time to report a bug in `kachedb-py`!"
+  - type: textarea
+    id: description
+    attributes:
+      label: "Describe the bug"
+      description: "A clear and concise description of what the bug is."
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: "Steps to Reproduce"
+      description: "Minimal code snippet or steps to reproduce the issue."
+      placeholder: |
+        from kachedb import KacheClient
+        client = KacheClient()
+        ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: "Expected Behavior"
+      description: "What you expected to happen."
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: "Environment"
+      description: "Python version, OS, torch/vllm versions."
+      placeholder: "Python 3.11, Ubuntu 24.04, torch 2.4.0, vLLM 0.6.0"
+    validations:
+      required: false
