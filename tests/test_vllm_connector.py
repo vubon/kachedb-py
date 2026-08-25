@@ -5,7 +5,7 @@ Unit and integration tests for KacheDB vLLM connector and prefix cache.
 from __future__ import annotations
 
 import types
-import pytest
+
 import torch
 
 from kachedb.vllm import (
@@ -56,7 +56,7 @@ class TestKacheDBPrefixCache:
         cache.register_block(hashes[1], block_id=1, num_tokens=16, metadata={"layer": 0})
 
         # Match prompt with shared prefix + new tokens
-        extended_prompt = prompt_system + [999, 1000, 1001]
+        extended_prompt = [*prompt_system, 999, 1000, 1001]
         matched_tokens, blocks = cache.find_longest_prefix(extended_prompt)
 
         assert matched_tokens == 32
@@ -76,7 +76,7 @@ class TestKacheDBMemoryManager:
         k_tensor = torch.randn(shape, dtype=torch.float16)
         v_tensor = torch.randn(shape, dtype=torch.float16)
 
-        offset, size, desc = mm.write_paged_block(
+        offset, _size, desc = mm.write_paged_block(
             key_tensor=k_tensor,
             val_tensor=v_tensor,
             layer_idx=3,
@@ -123,7 +123,7 @@ class TestKacheDBConnector:
         )
 
         # 2. Simulate subsequent request with matching prefix + new query
-        new_prompt = prompt_tokens + [999, 1000]
+        new_prompt = [*prompt_tokens, 999, 1000]
         new_input = types.SimpleNamespace(input_tokens=new_prompt)
 
         # Target KV cache to receive restored blocks

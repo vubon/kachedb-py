@@ -5,13 +5,12 @@ Asynchronous DMA and pinned host memory transfers for KacheDB KV-cache blocks.
 from __future__ import annotations
 
 import ctypes
-import os
-from typing import Optional, Tuple
 
 import numpy as np
 
 try:
     import torch
+
     HAS_TORCH = True
 except ImportError:
     HAS_TORCH = False
@@ -42,7 +41,7 @@ class KacheDBMemoryManager:
         layer_idx: int,
         seq_prefix_hash: int,
         block_id: int,
-    ) -> Tuple[int, int, TensorBlockDescriptor]:
+    ) -> tuple[int, int, TensorBlockDescriptor]:
         """Write a PagedAttention Key/Value block into shared memory with descriptor header.
 
         Parameters
@@ -98,8 +97,8 @@ class KacheDBMemoryManager:
         return offset, total_slot_size, desc
 
     def read_paged_block(
-        self, offset: int, shape: tuple, device: str = "cpu"
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        self, offset: int, shape: tuple[int, ...], device: str = "cpu"
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """Read a PagedAttention Key/Value block from shared memory with zero copy.
 
         Returns

@@ -5,9 +5,10 @@ KacheDB KV-cache connector for vLLM distributed inference engine.
 from __future__ import annotations
 
 import logging
-from typing import Any, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any
 
-import torch
+if TYPE_CHECKING:
+    import torch
 
 from .dma import KacheDBMemoryManager
 from .prefix_cache import KacheDBPrefixCache
@@ -27,7 +28,7 @@ except ImportError:
             self.config = config
 
 
-class KacheDBConnector(KVConnectorBase):
+class KacheDBConnector(KVConnectorBase):  # type: ignore[misc]
     """Zero-copy KacheDB KV-cache connector for vLLM.
 
     Provides microsecond-level prompt prefix cache restoration and PagedAttention
@@ -36,14 +37,15 @@ class KacheDBConnector(KVConnectorBase):
     Usage in vLLM CLI::
 
         vllm serve meta-llama/Meta-Llama-3-8B-Instruct \\
-            --kv-transfer-config '{"kv_connector": "kachedb.vllm.KacheDBConnector", "kv_role": "kv_both"}'
+            --kv-transfer-config \\
+            '{"kv_connector": "kachedb.vllm.KacheDBConnector", "kv_role": "kv_both"}'
     """
 
     def __init__(
         self,
         rank: int = 0,
         local_rank: int = 0,
-        config: Optional[Any] = None,
+        config: Any | None = None,
         block_size: int = 16,
         pool_size_mb: int = 512,
     ):
@@ -54,9 +56,7 @@ class KacheDBConnector(KVConnectorBase):
 
         # Initialize prefix cache & memory manager for this rank's core
         self.prefix_cache = KacheDBPrefixCache(block_size=block_size)
-        self.memory_manager = KacheDBMemoryManager(
-            core_id=local_rank, pool_size_mb=pool_size_mb
-        )
+        self.memory_manager = KacheDBMemoryManager(core_id=local_rank, pool_size_mb=pool_size_mb)
 
         logger.info(
             "KacheDBConnector initialized for worker rank %d (core_id=%d, block_size=%d)",
@@ -69,8 +69,8 @@ class KacheDBConnector(KVConnectorBase):
         self,
         model_executable: Any,
         model_input: Any,
-        kv_caches: List[torch.Tensor],
-        hidden_or_intermediate_states: Optional[List[torch.Tensor]] = None,
+        kv_caches: list[torch.Tensor],
+        hidden_or_intermediate_states: list[torch.Tensor] | None = None,
     ) -> None:
         """Offload computed PagedAttention KV-cache blocks into KacheDB shared memory.
 
@@ -86,7 +86,7 @@ class KacheDBConnector(KVConnectorBase):
             Optional intermediate states.
         """
         # Extract prompt tokens from input if available
-        prompt_tokens: List[int] = getattr(model_input, "input_tokens", [])
+        prompt_tokens: list[int] = getattr(model_input, "input_tokens", [])
         if not prompt_tokens and hasattr(model_input, "seq_data"):
             # vLLM SequenceData extraction
             prompt_tokens = list(model_input.seq_data.get_token_ids())
@@ -145,8 +145,8 @@ class KacheDBConnector(KVConnectorBase):
         self,
         model_executable: Any,
         model_input: Any,
-        kv_caches: List[torch.Tensor],
-    ) -> Tuple[Optional[torch.Tensor], bool]:
+        kv_caches: list[torch.Tensor],
+    ) -> tuple[torch.Tensor | None, bool]:
         """Query KacheDB and restore matching cached prefix blocks into GPU HBM.
 
         Returns
@@ -154,16 +154,14 @@ class KacheDBConnector(KVConnectorBase):
         Tuple[Optional[torch.Tensor], bool]
             (matched_tokens_or_states, is_cache_hit)
         """
-        prompt_tokens: List[int] = getattr(model_input, "input_tokens", [])
+        prompt_tokens: list[int] = getattr(model_input, "input_tokens", [])
         if not prompt_tokens and hasattr(model_input, "seq_data"):
             prompt_tokens = list(model_input.seq_data.get_token_ids())
 
         if not prompt_tokens:
             return None, False
 
-        matched_tokens, matched_blocks = self.prefix_cache.find_longest_prefix(
-            prompt_tokens
-        )
+        matched_tokens, matched_blocks = self.prefix_cache.find_longest_prefix(prompt_tokens)
         if matched_tokens == 0:
             return None, False
 

@@ -46,31 +46,24 @@ __all__ = [
     "AsyncConnectionPool",
     "AsyncKacheClient",
     "AsyncPipeline",
-    # Connection
     "Connection",
     "ConnectionError",
     "ConnectionPool",
-    # Clients
     "KacheClient",
-    # Exceptions
+    "KacheDBConnector",
     "KacheDBError",
-    # Pipeline
+    "KacheDBMemoryManager",
+    "KacheDBPrefixCache",
     "Pipeline",
     "PoolExhaustedError",
     "ProtocolError",
     "ResponseError",
-    # Tensor / Zero-Copy
     "TensorBlockDescriptor",
     "TensorDType",
     "TimeoutError",
-    # Version
     "__version__",
     "attach_shm",
     "detach_all",
     "read_tensor",
     "read_torch_tensor",
-    # vLLM Integration
-    "KacheDBConnector",
-    "KacheDBMemoryManager",
-    "KacheDBPrefixCache",
 ]

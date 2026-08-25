@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import hashlib
 import struct
-from typing import Dict, List, Optional, Tuple
+from typing import Any
 
 
 class KacheDBPrefixCache:
@@ -19,14 +19,14 @@ class KacheDBPrefixCache:
     def __init__(self, block_size: int = 16):
         self.block_size = block_size
         # In-memory mapping from prefix_hash to (block_id, num_tokens, metadata)
-        self._index: Dict[int, Tuple[int, int, dict]] = {}
+        self._index: dict[int, tuple[int, int, dict[str, Any]]] = {}
 
-    def compute_block_hash(self, token_ids: List[int], parent_hash: int = 0) -> int:
+    def compute_block_hash(self, token_ids: list[int], parent_hash: int = 0) -> int:
         """Compute a deterministic 64-bit hash for a token block chained to its parent.
 
         Parameters
         ----------
-        token_ids : List[int]
+        token_ids : list[int]
             List of integer token IDs for the block (length <= block_size).
         parent_hash : int
             Hash of the preceding token block in the sequence.
@@ -46,22 +46,23 @@ class KacheDBPrefixCache:
 
         # Blake3 or fast 64-bit MD5 truncated digest
         digest = hashlib.blake2b(buf, digest_size=8).digest()
-        return struct.unpack("<Q", digest)[0]
+        val: tuple[int, ...] = struct.unpack("<Q", digest)
+        return int(val[0])
 
-    def compute_sequence_hashes(self, prompt_tokens: List[int]) -> List[int]:
+    def compute_sequence_hashes(self, prompt_tokens: list[int]) -> list[int]:
         """Compute chained block hashes for an entire prompt token sequence.
 
         Parameters
         ----------
-        prompt_tokens : List[int]
+        prompt_tokens : list[int]
             Full list of prompt token IDs.
 
         Returns
         -------
-        List[int]
+        list[int]
             List of 64-bit block hashes, one per block_size chunk.
         """
-        hashes: List[int] = []
+        hashes: list[int] = []
         current_hash = 0
         num_blocks = len(prompt_tokens) // self.block_size
 
@@ -77,18 +78,18 @@ class KacheDBPrefixCache:
         prefix_hash: int,
         block_id: int,
         num_tokens: int,
-        metadata: Optional[dict] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """Register a cached block in the local prefix index."""
         self._index[prefix_hash] = (block_id, num_tokens, metadata or {})
 
-    def lookup_block(self, prefix_hash: int) -> Optional[Tuple[int, int, dict]]:
+    def lookup_block(self, prefix_hash: int) -> tuple[int, int, dict[str, Any]] | None:
         """Look up a block in the prefix index by its chained hash."""
         return self._index.get(prefix_hash)
 
     def find_longest_prefix(
-        self, prompt_tokens: List[int]
-    ) -> Tuple[int, List[Tuple[int, int, dict]]]:
+        self, prompt_tokens: list[int]
+    ) -> tuple[int, list[tuple[int, int, dict[str, Any]]]]:
         """Find the longest matching prefix for a prompt.
 
         Returns
