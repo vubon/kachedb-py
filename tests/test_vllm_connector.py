@@ -6,13 +6,15 @@ from __future__ import annotations
 
 import types
 
-import torch
+import pytest
 
 from kachedb.vllm import (
     KacheDBConnector,
     KacheDBMemoryManager,
     KacheDBPrefixCache,
 )
+
+torch = pytest.importorskip("torch")
 
 
 class TestKacheDBPrefixCache:
