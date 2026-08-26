@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.0a4] — 2026-08-26
+
+### Added
+- **SGLang (RadixAttention) KV-Cache Connector (`kachedb.sglang`):**
+  - Added `KacheDBSGLangConnector` for microsecond-tier tree node offloading and prefix restoration via POSIX Shared Memory (`/dev/shm`).
+  - Added `KacheDBRadixAdapter` with chained Blake2b hashing for variable-length token slices ($H_k = \text{Blake2b}(H_{\text{parent}} \,\|\, \text{len} \,\|\, \text{tokens})$).
+  - Added `RadixNodeDescriptor` for tracking tree node IDs, layer offsets, parent hashes, and metadata.
+- **Universal Multi-Precision DMA (`kachedb.dma` & `TensorCodec`):**
+  - Added `TensorCodec` in `kachedb.descriptor` with dynamic registry mapping for `torch.bfloat16` (BF16), `torch.float16` (FP16), `torch.float32` (FP32), and `torch.int8` (INT8).
+  - Refactored `KacheDBMemoryManager` into top-level `kachedb.dma`, universally shared across `kachedb.vllm` and `kachedb.sglang` with 100% backward compatibility.
+- **Production Integration Guides:**
+  - Added `docs/guides/vllm_integration_guide.md` with multi-GPU CLI flags, programmatic loops, and production `docker-compose.yml`.
+  - Added `docs/guides/sglang_integration_guide.md` with RadixAttention tree-branching and multi-precision configurations.
+- **Unit Test Suite:** Added `tests/test_sglang_connector.py` covering variable-length hashing, single/multi-node offloads, branching tree resolution, and multi-precision FP16/BF16/FP32/INT8 bit-exact roundtrips (85/85 tests passing).
+- **Packaging:** Added `sglang = ["torch>=2.0", "sglang>=0.3.0"]` extra to `pyproject.toml`.
+
+---
+
 ## [0.1.0a3] — 2026-08-25
 
 ### Added
