@@ -10,7 +10,7 @@ readme = "README.md"
 license = "Apache-2.0 OR MIT"
 requires-python = ">=3.10"
 authors = [{ name = "KacheDB Core Team" }]
-keywords = ["kachedb", "cache", "redis", "kv-cache", "llm", "tensor", "zero-copy", "vllm"]
+keywords = ["kachedb", "cache", "redis", "kv-cache", "llm", "tensor", "zero-copy", "vllm", "sglang", "radix-attention"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -35,7 +35,8 @@ dependencies = [
 [project.optional-dependencies]
 torch = ["torch>=2.0"]
 vllm = ["torch>=2.0", "vllm>=0.6.0"]
-all = ["torch>=2.0", "vllm>=0.6.0"]
+sglang = ["torch>=2.0", "sglang>=0.3.0"]
+all = ["torch>=2.0", "vllm>=0.6.0", "sglang>=0.3.0"]
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",

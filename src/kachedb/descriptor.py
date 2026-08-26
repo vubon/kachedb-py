@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import ctypes
 from enum import IntEnum
+from typing import Any, ClassVar
 
 #: Magic sentinel value: ``KACH`` in little-endian ASCII bytes.
 TENSOR_DESCRIPTOR_MAGIC: int = 0x4B41_4348
@@ -118,3 +119,90 @@ class TensorBlockDescriptor(ctypes.Structure):
         obj = cls()
         ctypes.memmove(ctypes.byref(obj), source[:64], 64)
         return obj
+
+
+class TensorCodec:
+    """Zero-copy binary serializer and deserializer for PyTorch/NumPy tensors.
+
+    Provides a clean, registry-driven mapping between PyTorch precision types,
+    binary storage bytes, and KacheDB TensorBlockDescriptors without ad-hoc branching.
+    """
+
+    # Mapping from torch.dtype to (TensorDType, bytes_per_element)
+    _DTYPE_MAP: ClassVar[dict[Any, tuple[TensorDType, int]]] = {}
+
+    @classmethod
+    def _init_map(cls) -> None:
+        if cls._DTYPE_MAP:
+            return
+        try:
+            import torch
+
+            cls._DTYPE_MAP = {
+                torch.float16: (TensorDType.FP16, 2),
+                torch.bfloat16: (TensorDType.BF16, 2),
+                torch.float32: (TensorDType.FP32, 4),
+                torch.int8: (TensorDType.INT8, 1),
+                torch.uint8: (TensorDType.FP8E4M3, 1),
+            }
+        except ImportError:
+            pass
+
+    @classmethod
+    def serialize_tensor(cls, tensor: Any) -> tuple[bytes, TensorDType, int]:
+        """Convert a contiguous PyTorch tensor into raw memory bytes.
+
+        Returns
+        -------
+        tuple[bytes, TensorDType, int]
+            (raw_bytes, tensor_dtype_enum, bytes_per_element)
+        """
+        cls._init_map()
+        import torch
+
+        dtype_info = cls._DTYPE_MAP.get(tensor.dtype)
+        if dtype_info is None:
+            dtype_enum = TensorDType.FP16
+            bytes_per_elem = 2
+        else:
+            dtype_enum, bytes_per_elem = dtype_info
+
+        # Handle bfloat16 view for byte conversion
+        if tensor.dtype == torch.bfloat16:
+            raw_bytes = tensor.contiguous().cpu().view(torch.uint8).numpy().tobytes()
+        else:
+            raw_bytes = tensor.contiguous().cpu().numpy().tobytes()
+
+        return raw_bytes, dtype_enum, bytes_per_elem
+
+    @classmethod
+    def deserialize_tensor(
+        cls,
+        buffer: bytearray | memoryview | bytes,
+        offset: int,
+        shape: tuple[int, ...],
+        dtype: Any,
+        device: str = "cpu",
+    ) -> Any:
+        """Construct a zero-copy PyTorch tensor from raw memory buffer."""
+        cls._init_map()
+        import numpy as np
+        import torch
+
+        num_elements = int(np.prod(shape))
+
+        tensor = (
+            torch.frombuffer(
+                buffer,
+                dtype=dtype,
+                count=num_elements,
+                offset=offset,
+            )
+            .reshape(shape)
+            .clone()
+        )
+
+        if device != "cpu" and torch.cuda.is_available():
+            tensor = tensor.to(device, non_blocking=True)
+
+        return tensor

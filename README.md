@@ -19,23 +19,23 @@
 pip install kachedb
 ```
 
-With **PyTorch** tensor zero-copy support:
+### Installation Extras:
 
 ```bash
+# PyTorch tensor zero-copy support (FP16, BF16, FP32, INT8)
 pip install "kachedb[torch]"
-```
 
-With **vLLM** KV-cache acceleration plugin:
-
-```bash
+# vLLM PagedAttention KV-transfer plugin
 pip install "kachedb[vllm]"
-```
 
-Or install all extras:
+# SGLang RadixAttention KV-cache plugin
+pip install "kachedb[sglang]"
 
-```bash
+# Install all plugins & dependencies
 pip install "kachedb[all]"
 ```
+
+---
 
 ## 🚀 Quickstart
 
@@ -77,8 +77,6 @@ asyncio.run(main())
 
 ### Pipeline Batching
 
-Reduce network round-trips by batching multiple commands:
-
 ```python
 from kachedb import KacheClient
 
@@ -95,35 +93,81 @@ with KacheClient() as client:
     # ["OK", "OK", "OK", b"1", b"2", b"3"]
 ```
 
-### Async Pipeline
+---
 
-```python
-from kachedb import AsyncKacheClient
+## 🧠 LLM KV-Cache Acceleration (vLLM & SGLang)
 
-async def main():
-    async with AsyncKacheClient() as client:
-        pipe = client.pipeline()
-        pipe.set("x", "10")
-        pipe.get("x")
-        results = await pipe.execute()
-        # ["OK", b"10"]
+KacheDB serves as a high-speed, zero-copy **L1/L2 KV-Cache Tier** for AI inference engines, bypassing quadratic transformer attention prefill passes via POSIX shared memory (`/dev/shm`):
+
+### 1. 🔌 vLLM PagedAttention Integration
+
+Launch vLLM with the KacheDB KV connector:
+
+```bash
+vllm serve meta-llama/Meta-Llama-3-8B-Instruct \
+  --kv-transfer-config '{"kv_connector": "kachedb.vllm.KacheDBConnector", "kv_role": "kv_both"}'
 ```
 
-### Zero-Copy Tensor Access (LLM KV-Cache)
+Programmatic Usage:
+```python
+from kachedb.vllm import KacheDBConnector
 
-Read KV-cache tensors directly from KacheDB's shared memory with **zero data copying**:
+connector = KacheDBConnector(rank=0, local_rank=0, block_size=16)
+
+# Restore prefix blocks directly into GPU PagedAttention buffers
+matched_states, is_hit = connector.recv_kv_caches_and_hidden_states(
+    model_executable=model,
+    model_input=model_input,
+    kv_caches=gpu_kv_caches,
+)
+```
+👉 *Read the full [vLLM Production Integration Guide](docs/guides/vllm_integration_guide.md).*
+
+---
+
+### 2. 🌳 SGLang RadixAttention Integration
+
+Use `KacheDBSGLangConnector` to offload and restore dynamic Radix tree branches:
 
 ```python
-from kachedb import read_tensor, read_torch_tensor
+from kachedb.sglang import KacheDBSGLangConnector
 
-# Read as numpy array (zero-copy via /dev/shm)
-np_tensor = read_tensor(core_id=0, byte_offset=0)
-print(np_tensor.shape, np_tensor.dtype)
+connector = KacheDBSGLangConnector(rank=0, local_rank=0, pool_size_mb=2048)
 
-# Read as PyTorch tensor (requires: pip install kachedb[torch])
-torch_tensor = read_torch_tensor(core_id=0, byte_offset=0)
-print(torch_tensor.shape, torch_tensor.dtype)
+# 1. Offload an evicted Radix tree node (Variable-length token slice)
+desc = connector.offload_node(
+    node_id=node.id,
+    token_ids=node.token_ids,
+    k_tensors=node_k_tensors,
+    v_tensors=node_v_tensors,
+    parent_hash=parent_hash,
+)
+
+# 2. Restore cached prefix subtree directly into target GPU/CPU memory
+matched_tokens, is_hit = connector.restore_prefix(
+    prompt_tokens=incoming_prompt_token_ids,
+    target_k_buffers=target_k_buffers,
+    target_v_buffers=target_v_buffers,
+)
 ```
+👉 *Read the full [SGLang Production Integration Guide](docs/guides/sglang_integration_guide.md).*
+
+---
+
+## ⚡ Master Proof-of-Speed Benchmarks
+
+Evaluated on **Meta-Llama-3-8B Topology** (32 Layers, 8 KV Heads, FP16) connected to the live KacheDB storage engine:
+
+| Context Length | KV Cache Size | 🔴 Cold GPU Recompute | 🟢 SGLang + KacheDB | ⚡ Speedup |
+| :--- | :---: | :---: | :---: | :---: |
+| **512 tokens** | 64.0 MB | `2,429.8 ms` | **`7.99 ms`** | **`304.1×`** ⚡ |
+| **1,024 tokens** | 128.0 MB | `607.9 ms` | **`7.17 ms`** | **`84.8×`** ⚡ |
+| **2,048 tokens** | 256.0 MB | `1,425.1 ms` | **`9.61 ms`** | **`148.3×`** ⚡ |
+| **4,096 tokens** | 512.0 MB | `3,164.2 ms` | **`10.14 ms`** | **`312.2×`** ⚡ |
+| **8,192 tokens** | 1,024.0 MB | `5,541.6 ms` | **`9.25 ms`** | **`599.1×`** ⚡ |
+| **16,384 tokens** | 2,048.0 MB (2GB) | `26,081.1 ms` (26.1s) | **`18.71 ms`** | **`1,393.9×`** ⚡ |
+
+---
 
 ## 📋 Supported Commands
 
@@ -137,6 +181,8 @@ All commands follow the [KacheDB RESP2/RESP3 wire protocol](https://github.com/v
 | `MGET` | `client.mget(*keys)` | Batch retrieve multiple keys |
 | `DEL` | `client.delete(*keys)` | Delete keys |
 | `EXISTS` | `client.exists(*keys)` | Count existing keys |
+
+---
 
 ## 🏗️ Architecture
 
@@ -168,82 +214,43 @@ All commands follow the [KacheDB RESP2/RESP3 wire protocol](https://github.com/v
 └──────────────────────────────────────────────────────────┘
 ```
 
-## 🔧 Connection Pool
+---
 
-The client automatically manages a connection pool:
-
-```python
-from kachedb import KacheClient
-
-# Pool with up to 20 connections
-client = KacheClient(
-    host="127.0.0.1",
-    port=6379,
-    max_connections=20,
-    socket_timeout=5.0,
-)
-```
-
-## 🔌 vLLM KV-Cache Acceleration
-
-KacheDB provides a plug-and-play connector for the **vLLM distributed inference engine** to accelerate prompt prefill and bypass redundant attention computation via zero-copy POSIX shared memory (`/dev/shm`):
-
-### 1. Launch with vLLM CLI:
-
-```bash
-vllm serve meta-llama/Meta-Llama-3-8B-Instruct \
-  --kv-transfer-config '{"kv_connector": "kachedb.vllm.KacheDBConnector", "kv_role": "kv_both"}'
-```
-
-### 2. Programmatic Usage in Custom Engines:
-
-```python
-from kachedb.vllm import KacheDBConnector
-
-# Initialize connector for worker rank
-connector = KacheDBConnector(rank=0, local_rank=0, block_size=16)
-
-# Restore cached prefix blocks directly into GPU PagedAttention buffers
-matched_states, is_hit = connector.recv_kv_caches_and_hidden_states(
-    model_executable=model,
-    model_input=model_input,
-    kv_caches=gpu_kv_caches,
-)
-```
-
-## 🧪 Development
+## 🧪 Development & Quality Gates
 
 ```bash
 # Clone
 git clone https://github.com/vubon/kachedb-py.git
 cd kachedb-py
 
-# Install in dev mode
-pip install -e ".[dev]"
+# Install in editable dev mode with all extras
+pip install -e ".[all,dev]"
 
-# Run unit tests
-pytest tests/ -v --ignore=tests/test_integration.py
+# Run full unit test suite (85 tests)
+pytest tests/ -v
 
-# Run integration tests (requires running KacheDB server)
-pytest tests/test_integration.py -v
-
-# Lint
+# Code formatting & linting
 ruff check src/ tests/
 ruff format --check src/ tests/
 
-# Type check
-mypy src/kachedb/
+# Strict type checking
+mypy src/
 ```
 
-## 🔗 Related Projects
+---
 
-- **[KacheDB Server](https://github.com/vubon/kachedb)** — The Rust storage engine
+## 🔗 Documentation & Guides
+
+- 📘 [vLLM Production Integration Guide](docs/guides/vllm_integration_guide.md)
+- 📗 [SGLang Production Integration Guide](docs/guides/sglang_integration_guide.md)
+- 🏆 [Master Proof-of-Speed Benchmarks](https://github.com/vubon/database/blob/main/experiments/master_sglang_kachedb_speed_benchmark.md)
+- 🦀 [KacheDB Rust Server Engine](https://github.com/vubon/kachedb)
+
+---
 
 ## 📄 License
 
 Dual-licensed under either of:
-
 - Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
 - MIT license ([LICENSE-MIT](LICENSE-MIT))
-
 at your option.
