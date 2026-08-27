@@ -5,6 +5,26 @@ All notable changes to the `kachedb` Python SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0a5] — 2026-08-28
+
+### Added
+- **In-Memory Semantic Cache Engine (`kachedb.semantic`):**
+  - Added `SemanticCache` class for intent-based LLM query caching matching by cosine similarity ($< 50\ \mu\text{s}$ cache resolution) with automatic TTL eviction and threshold tuning.
+  - Added `SearchResult` data class encapsulating matched key, similarity score, and cached response payload.
+- **Pluggable Embedding Providers (`kachedb.semantic.embedders`):**
+  - `TransformersEmbedder`: Native HuggingFace `AutoModel` with mean pooling over token embeddings.
+  - `FastEmbedAdapter`: Lightweight ONNX Runtime embedding generator via `fastembed`.
+  - `SentenceTransformersAdapter`: HuggingFace `SentenceTransformer` adapter.
+  - `OpenAIAdapter`: Remote embedding integration with OpenAI (`text-embedding-3-small`).
+  - `CallableAdapter`: Wrapper for any custom user embedding function (`Callable[[str], list[float]]`).
+  - `MockEmbedder`: Deterministic, zero-dependency token and semantic-cluster pseudo-embedder for local tests and simulations.
+- **Native Vector Client Operations (`kachedb.KacheClient`):**
+  - `client.vadd(index, item_id, vector, payload, ex)`: Store vector embedding with optional metadata and TTL.
+  - `client.vsearch(index, query_vector, top_k, threshold)`: Nearest-neighbor search returning `[(item_id, similarity, payload), ...]`.
+  - `client.vdel(index, item_id)`: Remove vector from named index.
+  - `client.vstats(index)`: Retrieve index dimension, active vector count, and RAM footprint.
+- **Test Suite & Type Checking:** Added `tests/test_semantic_cache.py` and `tests/test_semantic_standalone.py` with full type annotations, mypy compliance, and ruff formatting (102/102 tests passing).
+
 ---
 
 ## [0.1.0a4] — 2026-08-26
