@@ -214,3 +214,125 @@ class KacheClient:
         """
         conn = self._get_conn()
         return Pipeline(conn)
+
+    # ── Vector Search & Semantic Cache Commands ───────────────────────────
+
+    def vadd(
+        self,
+        index: str | bytes,
+        item_id: str | bytes,
+        vector: bytes | list[float] | tuple[float, ...],
+        *,
+        payload: str | bytes | None = None,
+        ex: int | None = None,
+    ) -> bool:
+        """Store a vector embedding in a named vector index.
+
+        Parameters
+        ----------
+        index : str | bytes
+            Target vector index name.
+        item_id : str | bytes
+            Unique identifier for the vector record.
+        vector : bytes | list[float] | tuple[float, ...]
+            Raw float32 little-endian bytes or sequence of floats.
+        payload : str | bytes | None
+            Optional associated text or metadata.
+        ex : int | None
+            TTL expiration in seconds.
+        """
+        import struct
+
+        if isinstance(vector, (list, tuple)):
+            dim = len(vector)
+            vector_bytes = struct.pack(f"<{dim}f", *vector)
+        elif isinstance(vector, (bytes, bytearray)):
+            vector_bytes = bytes(vector)
+            dim = len(vector_bytes) // 4
+        else:
+            raise TypeError(f"Unsupported vector type: {type(vector)}")
+
+        args: list[str | bytes] = ["VADD", index, item_id, str(dim), vector_bytes]
+        if payload is not None:
+            args.extend(["PAYLOAD", payload])
+        if ex is not None:
+            args.extend(["EX", str(ex)])
+
+        result = self._execute(*args)
+        return result == 1 or result == "OK"
+
+    def vsearch(
+        self,
+        index: str | bytes,
+        query_vector: bytes | list[float] | tuple[float, ...],
+        *,
+        top_k: int = 1,
+        threshold: float = 0.0,
+    ) -> list[tuple[str | bytes, float, str | bytes | None]]:
+        """Search for nearest semantic vectors in a named index.
+
+        Returns a list of tuples: (item_id, similarity_score, payload).
+        """
+        import struct
+
+        if isinstance(query_vector, (list, tuple)):
+            query_bytes = struct.pack(f"<{len(query_vector)}f", *query_vector)
+        elif isinstance(query_vector, (bytes, bytearray)):
+            query_bytes = bytes(query_vector)
+        else:
+            raise TypeError(f"Unsupported vector type: {type(query_vector)}")
+
+        args: list[str | bytes] = [
+            "VSEARCH",
+            index,
+            query_bytes,
+            "TOPK",
+            str(top_k),
+            "THRESHOLD",
+            str(threshold),
+        ]
+        raw_results = self._execute(*args)
+        if not isinstance(raw_results, list):
+            return []
+
+        results: list[tuple[str | bytes, float, str | bytes | None]] = []
+        for item in raw_results:
+            if isinstance(item, list) and len(item) >= 2:
+                raw_id = item[0]
+                item_id: str | bytes = raw_id if isinstance(raw_id, (str, bytes)) else str(raw_id)
+                raw_score = item[1]
+                try:
+                    if isinstance(raw_score, bytes):
+                        score = float(raw_score.decode())
+                    elif isinstance(raw_score, (int, float, str)):
+                        score = float(raw_score)
+                    else:
+                        score = 0.0
+                except Exception:
+                    score = 0.0
+                raw_payload = item[2] if len(item) > 2 else None
+                payload: str | bytes | None = (
+                    raw_payload
+                    if isinstance(raw_payload, (str, bytes)) or raw_payload is None
+                    else str(raw_payload)
+                )
+                results.append((item_id, score, payload))
+        return results
+
+    def vdel(self, index: str | bytes, item_id: str | bytes) -> bool:
+        """Delete a vector from a named index."""
+        result = self._execute("VDEL", index, item_id)
+        return result == 1
+
+    def vstats(self, index: str | bytes) -> dict[str, Any] | None:
+        """Get statistics for a named vector index."""
+        raw = self._execute("VSTATS", index)
+        if not isinstance(raw, list):
+            return None
+        stats: dict[str, Any] = {}
+        for i in range(0, len(raw) - 1, 2):
+            raw_k = raw[i]
+            k = raw_k.decode() if isinstance(raw_k, bytes) else str(raw_k)
+            v = raw[i + 1]
+            stats[k] = v
+        return stats

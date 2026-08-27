@@ -46,15 +46,15 @@ from kachedb import KacheClient
 
 with KacheClient(host="127.0.0.1", port=6379) as client:
     # Standard Redis-compatible operations
-    client.set("user:1", "alice", ex=3600)     # SET with 1-hour TTL
-    print(client.get("user:1"))                 # b"alice"
+    client.set("user:1", "alice", ex=3600)  # SET with 1-hour TTL
+    print(client.get("user:1"))  # b"alice"
 
     # Batch operations
     client.set("user:2", "bob")
-    result = client.mget("user:1", "user:2")    # [b"alice", b"bob"]
+    result = client.mget("user:1", "user:2")  # [b"alice", b"bob"]
 
     # Check existence
-    print(client.exists("user:1"))              # 1
+    print(client.exists("user:1"))  # 1
 
     # Delete
     client.delete("user:1", "user:2")
@@ -66,11 +66,13 @@ with KacheClient(host="127.0.0.1", port=6379) as client:
 import asyncio
 from kachedb import AsyncKacheClient
 
+
 async def main():
     async with AsyncKacheClient(host="127.0.0.1", port=6379) as client:
         await client.set("key", "value", ex=60)
         result = await client.get("key")
         print(result)  # b"value"
+
 
 asyncio.run(main())
 ```

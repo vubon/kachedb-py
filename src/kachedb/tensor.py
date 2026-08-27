@@ -14,25 +14,33 @@ from __future__ import annotations
 import contextlib
 import mmap
 import os
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import numpy as np
+if TYPE_CHECKING:
+    import numpy as np
 
 from .descriptor import TENSOR_DESCRIPTOR_MAGIC, TensorBlockDescriptor, TensorDType
 
 # Cached mmap handles keyed by (shm_path, size_bytes).
 _shm_cache: dict[str, mmap.mmap] = {}
 
-# Mapping from TensorDType enum to numpy dtype.
-_DTYPE_TO_NUMPY: dict[TensorDType, np.dtype[Any]] = {
-    TensorDType.FP32: np.dtype(np.float32),
-    TensorDType.FP16: np.dtype(np.float16),
-    TensorDType.BF16: np.dtype(np.uint16),  # uint16 view for BF16 in standard numpy
-    TensorDType.FP8E4M3: np.dtype(np.uint8),
-    TensorDType.FP8E5M2: np.dtype(np.uint8),
-    TensorDType.INT8: np.dtype(np.int8),
-    TensorDType.INT4: np.dtype(np.uint8),  # packed: 2 elements per byte
-}
+
+def _get_dtype_to_numpy() -> dict[TensorDType, Any]:
+    try:
+        import numpy as np
+    except ImportError as exc:
+        raise ImportError(
+            "numpy is required for tensor operations. Install it with: pip install numpy"
+        ) from exc
+    return {
+        TensorDType.FP32: np.dtype(np.float32),
+        TensorDType.FP16: np.dtype(np.float16),
+        TensorDType.BF16: np.dtype(np.uint16),
+        TensorDType.FP8E4M3: np.dtype(np.uint8),
+        TensorDType.FP8E5M2: np.dtype(np.uint8),
+        TensorDType.INT8: np.dtype(np.int8),
+        TensorDType.INT4: np.dtype(np.uint8),
+    }
 
 
 def attach_shm(
@@ -123,10 +131,13 @@ def read_tensor(
             f"expected {hex(TENSOR_DESCRIPTOR_MAGIC)}"
         )
 
+    import numpy as np
+
     payload_offset = byte_offset + 64
     payload_bytes = desc.payload_bytes
     dtype_enum = TensorDType(desc.dtype)
-    np_dtype = _DTYPE_TO_NUMPY.get(dtype_enum, np.dtype(np.uint8))
+    dtype_map = _get_dtype_to_numpy()
+    np_dtype = dtype_map.get(dtype_enum, np.dtype(np.uint8))
     element_count = payload_bytes // np_dtype.itemsize
 
     # Zero-copy buffer view.
@@ -167,11 +178,10 @@ def read_torch_tensor(
         If ``torch`` is not installed.
     """
     try:
+        import numpy as np
         import torch
     except ImportError as exc:
-        raise ImportError(
-            "torch is required for read_torch_tensor(). Install it with: pip install kachedb[torch]"
-        ) from exc
+        raise ImportError("numpy and torch are required for read_torch_tensor().") from exc
 
     np_array = read_tensor(core_id, byte_offset, size_bytes)
 
