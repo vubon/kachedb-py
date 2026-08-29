@@ -5,6 +5,22 @@ All notable changes to the `kachedb` Python SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b1] — 2026-08-30
+
+### Added
+- **Complete Redis TTL Lifecycle (`kachedb.KacheClient` & `kachedb.AsyncKacheClient`):**
+  - Added `expire`, `pexpire`, `expireat`, `pexpireat`, `ttl`, `pttl`, and `persist`.
+- **Extended Redis Command Primitives:**
+  - Added atomic operations: `mset`, `incr`, `decr`, `incrby`, `decrby`, `append`, `strlen`, and `info`.
+- **Async Vector & Semantic Operations (`AsyncKacheClient`):**
+  - Added asynchronous vector search and index operations: `vadd`, `vsearch`, `vdel`, and `vstats`.
+- **Asynchronous Semantic Cache (`kachedb.semantic.AsyncSemanticCache`):**
+  - Added high-level async intent matching and LLM response caching engine.
+- **Full Pipeline Support (`Pipeline` & `AsyncPipeline`):**
+  - Added support for all extended Redis primitives and TTL lifecycle commands in batch pipelines.
+
+---
+
 ## [0.1.0a5] — 2026-08-28
 
 ### Added

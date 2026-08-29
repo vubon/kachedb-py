@@ -21,6 +21,7 @@ from .embedders import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from ..async_client import AsyncKacheClient
     from ..client import KacheClient
 
 
@@ -170,4 +171,96 @@ class SemanticCache:
     def stats(self) -> dict[str, Any]:
         """Return index metrics including active vector count and memory usage."""
         stats = self.client.vstats(self.index_name)
+        return stats or {}
+
+
+class AsyncSemanticCache:
+    """High-level async Semantic Cache engine powered by KacheDB SIMD vector search.
+
+    Parameters
+    ----------
+    client : AsyncKacheClient
+        Active KacheDB async client connection.
+    index_name : str
+        Name of the vector cache index (e.g. "faq_cache", "llm_responses").
+    similarity_threshold : float
+        Minimum cosine similarity (0.0 to 1.0) required to trigger a cache HIT. Default: 0.85.
+    ttl_seconds : int | None
+        Cache item lifetime in seconds. Default: 86400 (24 hours). None for persistent.
+    embedder : EmbeddingAdapter | Callable[[str], list[float]] | None
+        Embedding model adapter. If None, automatically selects available backend.
+    """
+
+    def __init__(
+        self,
+        client: AsyncKacheClient,
+        index_name: str = "default_semantic_cache",
+        *,
+        similarity_threshold: float = 0.85,
+        ttl_seconds: int | None = 86400,
+        embedder: EmbeddingAdapter | Callable[[str], list[float]] | None = None,
+    ) -> None:
+        self.client = client
+        self.index_name = index_name
+        self.similarity_threshold = similarity_threshold
+        self.ttl_seconds = ttl_seconds
+
+        if embedder is None:
+            self.embedder = SemanticCache._auto_select_embedder()
+        elif callable(embedder) and not hasattr(embedder, "encode"):
+            self.embedder = CallableAdapter(embedder)
+        else:
+            self.embedder = embedder
+
+    async def set(
+        self,
+        prompt: str,
+        response: str,
+        *,
+        ttl_seconds: int | None = None,
+    ) -> bool:
+        """Store a prompt and response in the semantic cache asynchronously."""
+        vector = self.embedder.encode(prompt)
+        ex = ttl_seconds if ttl_seconds is not None else self.ttl_seconds
+        return await self.client.vadd(
+            index=self.index_name,
+            item_id=prompt,
+            vector=vector,
+            payload=response,
+            ex=ex,
+        )
+
+    async def get(
+        self,
+        prompt: str,
+        *,
+        threshold: float | None = None,
+    ) -> SearchResult | None:
+        """Search the cache asynchronously for semantically equivalent prompts."""
+        th = threshold if threshold is not None else self.similarity_threshold
+        vector = self.embedder.encode(prompt)
+
+        matches = await self.client.vsearch(
+            index=self.index_name,
+            query_vector=vector,
+            top_k=1,
+            threshold=th,
+        )
+
+        if not matches:
+            return None
+
+        item_id, score, payload = matches[0]
+        key_str = item_id.decode() if isinstance(item_id, bytes) else str(item_id)
+        val_str = payload.decode() if isinstance(payload, bytes) else str(payload or "")
+
+        return SearchResult(key=key_str, similarity=score, value=val_str)
+
+    async def delete(self, prompt: str) -> bool:
+        """Delete a prompt entry from the semantic cache asynchronously."""
+        return await self.client.vdel(self.index_name, prompt)
+
+    async def stats(self) -> dict[str, Any]:
+        """Return index metrics asynchronously."""
+        stats = await self.client.vstats(self.index_name)
         return stats or {}

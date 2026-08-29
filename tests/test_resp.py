@@ -42,7 +42,7 @@ class TestEncodeCommand:
 
 class TestEncodeCommands:
     def test_pipeline_encoding(self) -> None:
-        commands = [["SET", "a", "1"], ["GET", "a"]]
+        commands: list[list[str | bytes]] = [["SET", "a", "1"], ["GET", "a"]]
         result = encode_commands(commands)
         # Should be two concatenated RESP arrays.
         assert result.count(b"*") == 2

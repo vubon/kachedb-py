@@ -4,6 +4,8 @@ Unit tests for KacheDB SGLang (RadixAttention) KV-cache integration.
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 torch = pytest.importorskip("torch")
@@ -15,7 +17,7 @@ from kachedb.sglang import (  # noqa: E402
 from kachedb.vllm import KacheDBConnector  # noqa: E402
 
 
-def test_radix_node_hash_variable_length():
+def test_radix_node_hash_variable_length() -> None:
     """Verify deterministic 64-bit chained Blake2b hashing for arbitrary token slice lengths."""
     tokens_root = [101, 2054, 2003, 1037]  # 4 tokens
     tokens_child_a = [1024, 7592, 2005]  # 3 tokens
@@ -34,7 +36,7 @@ def test_radix_node_hash_variable_length():
     assert h_child_a != h_root1
 
 
-def test_radix_adapter_prefix_tree_matching():
+def test_radix_adapter_prefix_tree_matching() -> None:
     """Verify multi-branch Radix tree prefix resolution."""
     adapter = KacheDBRadixAdapter()
 
@@ -78,7 +80,7 @@ def test_radix_adapter_prefix_tree_matching():
     assert len(nodes_miss) == 0
 
 
-def test_sglang_connector_single_node_roundtrip():
+def test_sglang_connector_single_node_roundtrip() -> None:
     """Test offloading a Radix tree node's KV tensors and restoring with exact bit parity."""
     num_heads = 4
     head_dim = 64
@@ -134,7 +136,7 @@ def test_sglang_connector_single_node_roundtrip():
     connector.close()
 
 
-def test_sglang_connector_multi_branch_restore():
+def test_sglang_connector_multi_branch_restore() -> None:
     """Test multi-node sequential restoration across tree hierarchy."""
     num_heads = 2
     head_dim = 32
@@ -192,7 +194,7 @@ def test_sglang_connector_multi_branch_restore():
     connector.close()
 
 
-def test_vllm_sglang_cross_engine_coexistence():
+def test_vllm_sglang_cross_engine_coexistence() -> None:
     """Verify that both vLLM and SGLang connectors coexist in the same process seamlessly."""
     vllm_conn = KacheDBConnector(rank=0, local_rank=0, pool_size_mb=64)
     sglang_conn = KacheDBSGLangConnector(rank=0, local_rank=0, pool_size_mb=64)
@@ -205,7 +207,7 @@ def test_vllm_sglang_cross_engine_coexistence():
 
 
 @pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16, torch.float32, torch.int8])
-def test_sglang_connector_all_precisions(dtype: torch.dtype):
+def test_sglang_connector_all_precisions(dtype: Any) -> None:
     """Verify that FP16, BF16 (LLaMA default), FP32, and INT8 serialize/restore perfectly."""
     num_heads = 2
     head_dim = 64

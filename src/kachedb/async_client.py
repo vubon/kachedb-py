@@ -160,6 +160,95 @@ class AsyncKacheClient:
         result = await self._execute("EXISTS", *keys)
         return int(result) if isinstance(result, int) else 0
 
+    async def mset(self, mapping: dict[str | bytes, str | bytes]) -> bool:
+        """Set multiple keys to their respective values atomically."""
+        if not mapping:
+            return True
+        args: list[str | bytes] = ["MSET"]
+        for k, v in mapping.items():
+            args.extend([k, v])
+        result = await self._execute(*args)
+        return result == "OK"
+
+    async def incr(self, key: str | bytes, amount: int = 1) -> int:
+        """Increment the integer value of *key* by *amount* (default 1)."""
+        if amount == 1:
+            result = await self._execute("INCR", key)
+        else:
+            result = await self._execute("INCRBY", key, str(amount))
+        return int(result) if isinstance(result, int) else 0
+
+    async def incrby(self, key: str | bytes, amount: int) -> int:
+        """Increment the integer value of *key* by *amount*."""
+        return await self.incr(key, amount)
+
+    async def decr(self, key: str | bytes, amount: int = 1) -> int:
+        """Decrement the integer value of *key* by *amount* (default 1)."""
+        if amount == 1:
+            result = await self._execute("DECR", key)
+        else:
+            result = await self._execute("DECRBY", key, str(amount))
+        return int(result) if isinstance(result, int) else 0
+
+    async def decrby(self, key: str | bytes, amount: int) -> int:
+        """Decrement the integer value of *key* by *amount*."""
+        return await self.decr(key, amount)
+
+    async def append(self, key: str | bytes, value: str | bytes) -> int:
+        """Append *value* to *key*. Returns the new byte length of the value."""
+        result = await self._execute("APPEND", key, value)
+        return int(result) if isinstance(result, int) else 0
+
+    async def strlen(self, key: str | bytes) -> int:
+        """Return the byte length of the value stored at *key*."""
+        result = await self._execute("STRLEN", key)
+        return int(result) if isinstance(result, int) else 0
+
+    async def expire(self, key: str | bytes, seconds: int) -> bool:
+        """Set a timeout on *key* in seconds."""
+        result = await self._execute("EXPIRE", key, str(seconds))
+        return result == 1
+
+    async def pexpire(self, key: str | bytes, milliseconds: int) -> bool:
+        """Set a timeout on *key* in milliseconds."""
+        result = await self._execute("PEXPIRE", key, str(milliseconds))
+        return result == 1
+
+    async def expireat(self, key: str | bytes, timestamp: int) -> bool:
+        """Set an expiration deadline on *key* as a Unix timestamp (seconds)."""
+        result = await self._execute("EXPIREAT", key, str(timestamp))
+        return result == 1
+
+    async def pexpireat(self, key: str | bytes, timestamp_ms: int) -> bool:
+        """Set an expiration deadline on *key* as a Unix timestamp (milliseconds)."""
+        result = await self._execute("PEXPIREAT", key, str(timestamp_ms))
+        return result == 1
+
+    async def ttl(self, key: str | bytes) -> int:
+        """Return remaining time-to-live in seconds (-1 if no TTL, -2 if missing)."""
+        result = await self._execute("TTL", key)
+        return int(result) if isinstance(result, int) else -2
+
+    async def pttl(self, key: str | bytes) -> int:
+        """Return remaining time-to-live in milliseconds (-1 if no TTL, -2 if missing)."""
+        result = await self._execute("PTTL", key)
+        return int(result) if isinstance(result, int) else -2
+
+    async def persist(self, key: str | bytes) -> bool:
+        """Remove the existing timeout on *key*, persisting it indefinitely."""
+        result = await self._execute("PERSIST", key)
+        return result == 1
+
+    async def info(self, section: str | None = None) -> str:
+        """Return server information and runtime statistics."""
+        args: list[str | bytes] = ["INFO"]
+        if section is not None:
+            args.append(section)
+        result = await self._execute(*args)
+        if isinstance(result, bytes):
+            return result.decode("utf-8", errors="replace")
+        return str(result) if result is not None else ""
+
     # ── Pipeline ──────────────────────────────────────────────────────────
 
     def pipeline(self) -> AsyncPipeline:
@@ -167,3 +256,108 @@ class AsyncKacheClient:
         if self._writer is None or self._resp_reader is None:
             raise ConnectionError("Not connected to KacheDB")
         return AsyncPipeline(self._writer, self._resp_reader)
+
+    # ── Vector Search & Semantic Cache Commands ───────────────────────────
+
+    async def vadd(
+        self,
+        index: str | bytes,
+        item_id: str | bytes,
+        vector: bytes | list[float] | tuple[float, ...],
+        *,
+        payload: str | bytes | None = None,
+        ex: int | None = None,
+    ) -> bool:
+        """Store a vector embedding in a named vector index asynchronously."""
+        import struct
+
+        if isinstance(vector, (list, tuple)):
+            dim = len(vector)
+            vector_bytes = struct.pack(f"<{dim}f", *vector)
+        elif isinstance(vector, (bytes, bytearray)):
+            vector_bytes = bytes(vector)
+            dim = len(vector_bytes) // 4
+        else:
+            raise TypeError(f"Unsupported vector type: {type(vector)}")
+
+        args: list[str | bytes] = ["VADD", index, item_id, str(dim), vector_bytes]
+        if payload is not None:
+            args.extend(["PAYLOAD", payload])
+        if ex is not None:
+            args.extend(["EX", str(ex)])
+
+        result = await self._execute(*args)
+        return result == 1 or result == "OK"
+
+    async def vsearch(
+        self,
+        index: str | bytes,
+        query_vector: bytes | list[float] | tuple[float, ...],
+        *,
+        top_k: int = 1,
+        threshold: float = 0.0,
+    ) -> list[tuple[str | bytes, float, str | bytes | None]]:
+        """Search for nearest semantic vectors in a named index asynchronously."""
+        import struct
+
+        if isinstance(query_vector, (list, tuple)):
+            query_bytes = struct.pack(f"<{len(query_vector)}f", *query_vector)
+        elif isinstance(query_vector, (bytes, bytearray)):
+            query_bytes = bytes(query_vector)
+        else:
+            raise TypeError(f"Unsupported vector type: {type(query_vector)}")
+
+        args: list[str | bytes] = [
+            "VSEARCH",
+            index,
+            query_bytes,
+            "TOPK",
+            str(top_k),
+            "THRESHOLD",
+            str(threshold),
+        ]
+        raw_results = await self._execute(*args)
+        if not isinstance(raw_results, list):
+            return []
+
+        results: list[tuple[str | bytes, float, str | bytes | None]] = []
+        for item in raw_results:
+            if isinstance(item, list) and len(item) >= 2:
+                raw_id = item[0]
+                item_id: str | bytes = raw_id if isinstance(raw_id, (str, bytes)) else str(raw_id)
+                raw_score = item[1]
+                try:
+                    if isinstance(raw_score, bytes):
+                        score = float(raw_score.decode())
+                    elif isinstance(raw_score, (int, float, str)):
+                        score = float(raw_score)
+                    else:
+                        score = 0.0
+                except Exception:
+                    score = 0.0
+                raw_payload = item[2] if len(item) > 2 else None
+                payload: str | bytes | None = (
+                    raw_payload
+                    if isinstance(raw_payload, (str, bytes)) or raw_payload is None
+                    else str(raw_payload)
+                )
+                results.append((item_id, score, payload))
+        return results
+
+    async def vdel(self, index: str | bytes, item_id: str | bytes) -> bool:
+        """Delete a vector from a named index asynchronously."""
+        result = await self._execute("VDEL", index, item_id)
+        return result == 1
+
+    async def vstats(self, index: str | bytes) -> dict[str, Any] | None:
+        """Get statistics for a named vector index asynchronously."""
+        raw = await self._execute("VSTATS", index)
+        if not isinstance(raw, list):
+            return None
+        stats: dict[str, Any] = {}
+        for i in range(0, len(raw) - 1, 2):
+            raw_k = raw[i]
+            k = raw_k.decode() if isinstance(raw_k, bytes) else str(raw_k)
+            v = raw[i + 1]
+            stats[k] = v
+        return stats

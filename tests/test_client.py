@@ -111,3 +111,55 @@ class TestKacheClientExists:
         client = KacheClient(port=12345)
         result = client.exists()
         assert result == 0
+
+
+class TestKacheClientExtendedCommands:
+    def test_mset(self, mock_server: MockKacheDBServer) -> None:
+        mock_server.program_responses(resp_simple_string("OK"))
+        port = mock_server.start()
+
+        with KacheClient(port=port) as client:
+            assert client.mset({"k1": "v1", "k2": "v2"}) is True
+
+    def test_incr_decr(self, mock_server: MockKacheDBServer) -> None:
+        mock_server.program_responses(resp_integer(1), resp_integer(11), resp_integer(10))
+        port = mock_server.start()
+
+        with KacheClient(port=port) as client:
+            assert client.incr("counter") == 1
+            assert client.incrby("counter", 10) == 11
+            assert client.decr("counter") == 10
+
+    def test_append_strlen(self, mock_server: MockKacheDBServer) -> None:
+        mock_server.program_responses(resp_integer(11), resp_integer(11))
+        port = mock_server.start()
+
+        with KacheClient(port=port) as client:
+            assert client.append("msg", "hello world") == 11
+            assert client.strlen("msg") == 11
+
+    def test_ttl_and_persist(self, mock_server: MockKacheDBServer) -> None:
+        mock_server.program_responses(resp_integer(1), resp_integer(60), resp_integer(1))
+        port = mock_server.start()
+
+        with KacheClient(port=port) as client:
+            assert client.expire("temp", 60) is True
+            assert client.ttl("temp") == 60
+            assert client.persist("temp") is True
+
+    def test_expireat_and_pexpireat(self, mock_server: MockKacheDBServer) -> None:
+        mock_server.program_responses(resp_integer(1), resp_integer(1), resp_integer(1))
+        port = mock_server.start()
+
+        with KacheClient(port=port) as client:
+            assert client.pexpire("temp", 60000) is True
+            assert client.expireat("temp", 1893456000) is True
+            assert client.pexpireat("temp", 1893456000000) is True
+
+    def test_info(self, mock_server: MockKacheDBServer) -> None:
+        mock_server.program_responses(resp_bulk_string(b"# Server\r\nkachedb_version:0.1.0\r\n"))
+        port = mock_server.start()
+
+        with KacheClient(port=port) as client:
+            info = client.info()
+            assert "kachedb_version:0.1.0" in info

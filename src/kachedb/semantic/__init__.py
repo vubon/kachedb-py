@@ -4,7 +4,7 @@ KacheDB In-Memory Semantic Caching Module.
 Provides SIMD-accelerated embedding similarity search and semantic LLM response caching.
 """
 
-from .cache import SearchResult, SemanticCache
+from .cache import AsyncSemanticCache, SearchResult, SemanticCache
 from .embedders import (
     CallableAdapter,
     EmbeddingAdapter,
@@ -15,6 +15,7 @@ from .embedders import (
 )
 
 __all__ = [
+    "AsyncSemanticCache",
     "CallableAdapter",
     "EmbeddingAdapter",
     "FastEmbedAdapter",

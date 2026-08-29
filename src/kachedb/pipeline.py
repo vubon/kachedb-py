@@ -85,6 +85,69 @@ class Pipeline:
         """Queue an EXISTS command."""
         return self._queue("EXISTS", *keys)
 
+    def mset(self, mapping: dict[str | bytes, str | bytes]) -> Pipeline:
+        """Queue an MSET command."""
+        args: list[str | bytes] = ["MSET"]
+        for k, v in mapping.items():
+            args.extend([k, v])
+        return self._queue(*args)
+
+    def incr(self, key: str | bytes, amount: int = 1) -> Pipeline:
+        """Queue an INCR / INCRBY command."""
+        if amount == 1:
+            return self._queue("INCR", key)
+        return self._queue("INCRBY", key, str(amount))
+
+    def incrby(self, key: str | bytes, amount: int) -> Pipeline:
+        """Queue an INCRBY command."""
+        return self.incr(key, amount)
+
+    def decr(self, key: str | bytes, amount: int = 1) -> Pipeline:
+        """Queue a DECR / DECRBY command."""
+        if amount == 1:
+            return self._queue("DECR", key)
+        return self._queue("DECRBY", key, str(amount))
+
+    def decrby(self, key: str | bytes, amount: int) -> Pipeline:
+        """Queue a DECRBY command."""
+        return self.decr(key, amount)
+
+    def append(self, key: str | bytes, value: str | bytes) -> Pipeline:
+        """Queue an APPEND command."""
+        return self._queue("APPEND", key, value)
+
+    def strlen(self, key: str | bytes) -> Pipeline:
+        """Queue a STRLEN command."""
+        return self._queue("STRLEN", key)
+
+    def expire(self, key: str | bytes, seconds: int) -> Pipeline:
+        """Queue an EXPIRE command."""
+        return self._queue("EXPIRE", key, str(seconds))
+
+    def pexpire(self, key: str | bytes, milliseconds: int) -> Pipeline:
+        """Queue a PEXPIRE command."""
+        return self._queue("PEXPIRE", key, str(milliseconds))
+
+    def expireat(self, key: str | bytes, timestamp: int) -> Pipeline:
+        """Queue an EXPIREAT command."""
+        return self._queue("EXPIREAT", key, str(timestamp))
+
+    def pexpireat(self, key: str | bytes, timestamp_ms: int) -> Pipeline:
+        """Queue a PEXPIREAT command."""
+        return self._queue("PEXPIREAT", key, str(timestamp_ms))
+
+    def ttl(self, key: str | bytes) -> Pipeline:
+        """Queue a TTL command."""
+        return self._queue("TTL", key)
+
+    def pttl(self, key: str | bytes) -> Pipeline:
+        """Queue a PTTL command."""
+        return self._queue("PTTL", key)
+
+    def persist(self, key: str | bytes) -> Pipeline:
+        """Queue a PERSIST command."""
+        return self._queue("PERSIST", key)
+
     # ── Execution ─────────────────────────────────────────────────────────
 
     def execute(self) -> list[RespValue]:
@@ -185,6 +248,69 @@ class AsyncPipeline:
     def exists(self, *keys: str | bytes) -> AsyncPipeline:
         """Queue an EXISTS command."""
         return self._queue("EXISTS", *keys)
+
+    def mset(self, mapping: dict[str | bytes, str | bytes]) -> AsyncPipeline:
+        """Queue an MSET command."""
+        args: list[str | bytes] = ["MSET"]
+        for k, v in mapping.items():
+            args.extend([k, v])
+        return self._queue(*args)
+
+    def incr(self, key: str | bytes, amount: int = 1) -> AsyncPipeline:
+        """Queue an INCR / INCRBY command."""
+        if amount == 1:
+            return self._queue("INCR", key)
+        return self._queue("INCRBY", key, str(amount))
+
+    def incrby(self, key: str | bytes, amount: int) -> AsyncPipeline:
+        """Queue an INCRBY command."""
+        return self.incr(key, amount)
+
+    def decr(self, key: str | bytes, amount: int = 1) -> AsyncPipeline:
+        """Queue a DECR / DECRBY command."""
+        if amount == 1:
+            return self._queue("DECR", key)
+        return self._queue("DECRBY", key, str(amount))
+
+    def decrby(self, key: str | bytes, amount: int) -> AsyncPipeline:
+        """Queue a DECRBY command."""
+        return self.decr(key, amount)
+
+    def append(self, key: str | bytes, value: str | bytes) -> AsyncPipeline:
+        """Queue an APPEND command."""
+        return self._queue("APPEND", key, value)
+
+    def strlen(self, key: str | bytes) -> AsyncPipeline:
+        """Queue a STRLEN command."""
+        return self._queue("STRLEN", key)
+
+    def expire(self, key: str | bytes, seconds: int) -> AsyncPipeline:
+        """Queue an EXPIRE command."""
+        return self._queue("EXPIRE", key, str(seconds))
+
+    def pexpire(self, key: str | bytes, milliseconds: int) -> AsyncPipeline:
+        """Queue a PEXPIRE command."""
+        return self._queue("PEXPIRE", key, str(milliseconds))
+
+    def expireat(self, key: str | bytes, timestamp: int) -> AsyncPipeline:
+        """Queue an EXPIREAT command."""
+        return self._queue("EXPIREAT", key, str(timestamp))
+
+    def pexpireat(self, key: str | bytes, timestamp_ms: int) -> AsyncPipeline:
+        """Queue a PEXPIREAT command."""
+        return self._queue("PEXPIREAT", key, str(timestamp_ms))
+
+    def ttl(self, key: str | bytes) -> AsyncPipeline:
+        """Queue a TTL command."""
+        return self._queue("TTL", key)
+
+    def pttl(self, key: str | bytes) -> AsyncPipeline:
+        """Queue a PTTL command."""
+        return self._queue("PTTL", key)
+
+    def persist(self, key: str | bytes) -> AsyncPipeline:
+        """Queue a PERSIST command."""
+        return self._queue("PERSIST", key)
 
     async def execute(self) -> list[RespValue]:
         """Send all queued commands and collect responses."""

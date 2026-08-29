@@ -20,7 +20,7 @@ torch = pytest.importorskip("torch")
 class TestKacheDBPrefixCache:
     """Test suite for token chunk prefix hashing and lookup."""
 
-    def test_block_hash_determinism(self):
+    def test_block_hash_determinism(self) -> None:
         cache = KacheDBPrefixCache(block_size=16)
         tokens = [100, 200, 300, 400]
         h1 = cache.compute_block_hash(tokens, parent_hash=0)
@@ -29,7 +29,7 @@ class TestKacheDBPrefixCache:
         assert isinstance(h1, int)
         assert h1 > 0
 
-    def test_block_hash_chaining(self):
+    def test_block_hash_chaining(self) -> None:
         cache = KacheDBPrefixCache(block_size=16)
         chunk1 = list(range(16))
         chunk2 = list(range(16, 32))
@@ -41,14 +41,14 @@ class TestKacheDBPrefixCache:
         # Chained hash MUST differ from unchained hash
         assert h2_chained != h2_unchained
 
-    def test_sequence_hashes(self):
+    def test_sequence_hashes(self) -> None:
         cache = KacheDBPrefixCache(block_size=16)
         prompt = list(range(48))  # 3 full blocks
         hashes = cache.compute_sequence_hashes(prompt)
         assert len(hashes) == 3
         assert len(set(hashes)) == 3
 
-    def test_find_longest_prefix(self):
+    def test_find_longest_prefix(self) -> None:
         cache = KacheDBPrefixCache(block_size=16)
         prompt_system = list(range(32))  # 2 blocks
         hashes = cache.compute_sequence_hashes(prompt_system)
@@ -70,7 +70,7 @@ class TestKacheDBPrefixCache:
 class TestKacheDBMemoryManager:
     """Test suite for DMA and zero-copy block swapping."""
 
-    def test_write_and_read_paged_block(self):
+    def test_write_and_read_paged_block(self) -> None:
         mm = KacheDBMemoryManager(core_id=0, pool_size_mb=64)
 
         # Shape: [num_heads=8, block_size=16, head_dim=64]
@@ -102,7 +102,7 @@ class TestKacheDBMemoryManager:
 class TestKacheDBConnector:
     """Test suite for vLLM KacheDBConnector lifecycle and caching."""
 
-    def test_connector_send_and_recv_cycle(self):
+    def test_connector_send_and_recv_cycle(self) -> None:
         connector = KacheDBConnector(rank=0, local_rank=0, block_size=16, pool_size_mb=64)
 
         # Simulated PagedAttention tensor for 2 layers

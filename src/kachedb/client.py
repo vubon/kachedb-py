@@ -200,6 +200,95 @@ class KacheClient:
         result = self._execute("EXISTS", *keys)
         return int(result) if isinstance(result, int) else 0
 
+    def mset(self, mapping: dict[str | bytes, str | bytes]) -> bool:
+        """Set multiple keys to their respective values atomically."""
+        if not mapping:
+            return True
+        args: list[str | bytes] = ["MSET"]
+        for k, v in mapping.items():
+            args.extend([k, v])
+        result = self._execute(*args)
+        return result == "OK"
+
+    def incr(self, key: str | bytes, amount: int = 1) -> int:
+        """Increment the integer value of *key* by *amount* (default 1)."""
+        if amount == 1:
+            result = self._execute("INCR", key)
+        else:
+            result = self._execute("INCRBY", key, str(amount))
+        return int(result) if isinstance(result, int) else 0
+
+    def incrby(self, key: str | bytes, amount: int) -> int:
+        """Increment the integer value of *key* by *amount*."""
+        return self.incr(key, amount)
+
+    def decr(self, key: str | bytes, amount: int = 1) -> int:
+        """Decrement the integer value of *key* by *amount* (default 1)."""
+        if amount == 1:
+            result = self._execute("DECR", key)
+        else:
+            result = self._execute("DECRBY", key, str(amount))
+        return int(result) if isinstance(result, int) else 0
+
+    def decrby(self, key: str | bytes, amount: int) -> int:
+        """Decrement the integer value of *key* by *amount*."""
+        return self.decr(key, amount)
+
+    def append(self, key: str | bytes, value: str | bytes) -> int:
+        """Append *value* to *key*. Returns the new byte length of the value."""
+        result = self._execute("APPEND", key, value)
+        return int(result) if isinstance(result, int) else 0
+
+    def strlen(self, key: str | bytes) -> int:
+        """Return the byte length of the value stored at *key*."""
+        result = self._execute("STRLEN", key)
+        return int(result) if isinstance(result, int) else 0
+
+    def expire(self, key: str | bytes, seconds: int) -> bool:
+        """Set a timeout on *key* in seconds."""
+        result = self._execute("EXPIRE", key, str(seconds))
+        return result == 1
+
+    def pexpire(self, key: str | bytes, milliseconds: int) -> bool:
+        """Set a timeout on *key* in milliseconds."""
+        result = self._execute("PEXPIRE", key, str(milliseconds))
+        return result == 1
+
+    def expireat(self, key: str | bytes, timestamp: int) -> bool:
+        """Set an expiration deadline on *key* as a Unix timestamp (seconds)."""
+        result = self._execute("EXPIREAT", key, str(timestamp))
+        return result == 1
+
+    def pexpireat(self, key: str | bytes, timestamp_ms: int) -> bool:
+        """Set an expiration deadline on *key* as a Unix timestamp (milliseconds)."""
+        result = self._execute("PEXPIREAT", key, str(timestamp_ms))
+        return result == 1
+
+    def ttl(self, key: str | bytes) -> int:
+        """Return remaining time-to-live in seconds (-1 if no TTL, -2 if missing)."""
+        result = self._execute("TTL", key)
+        return int(result) if isinstance(result, int) else -2
+
+    def pttl(self, key: str | bytes) -> int:
+        """Return remaining time-to-live in milliseconds (-1 if no TTL, -2 if missing)."""
+        result = self._execute("PTTL", key)
+        return int(result) if isinstance(result, int) else -2
+
+    def persist(self, key: str | bytes) -> bool:
+        """Remove the existing timeout on *key*, persisting it indefinitely."""
+        result = self._execute("PERSIST", key)
+        return result == 1
+
+    def info(self, section: str | None = None) -> str:
+        """Return server information and runtime statistics."""
+        args: list[str | bytes] = ["INFO"]
+        if section is not None:
+            args.append(section)
+        result = self._execute(*args)
+        if isinstance(result, bytes):
+            return result.decode("utf-8", errors="replace")
+        return str(result) if result is not None else ""
+
     # ── Pipeline ──────────────────────────────────────────────────────────
 
     def pipeline(self) -> Pipeline:

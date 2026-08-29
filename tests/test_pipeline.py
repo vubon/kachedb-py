@@ -69,3 +69,55 @@ class TestPipeline:
             pipe.exists("key1")
             results = pipe.execute()
             assert results == [1, 0]
+
+    def test_pipeline_extended_commands(self, mock_server: MockKacheDBServer) -> None:
+        mock_server.program_responses(
+            resp_simple_string("OK")
+            + resp_integer(1)
+            + resp_integer(5)
+            + resp_integer(4)
+            + resp_integer(1)
+            + resp_integer(5)
+            + resp_integer(5)
+            + resp_integer(1)
+            + resp_integer(60)
+            + resp_integer(1)
+            + resp_integer(1)
+            + resp_integer(1)
+            + resp_integer(60000)
+            + resp_integer(1)
+        )
+        port = mock_server.start()
+
+        with KacheClient(port=port) as client:
+            pipe = client.pipeline()
+            pipe.mset({"k1": "v1", "k2": "v2"})
+            pipe.incr("counter")
+            pipe.incrby("counter", 4)
+            pipe.decr("counter", 1)
+            pipe.decrby("counter", 3)
+            pipe.append("str", "hello")
+            pipe.strlen("str")
+            pipe.expire("temp", 60)
+            pipe.ttl("temp")
+            pipe.pexpire("temp", 60000)
+            pipe.expireat("temp", 1893456000)
+            pipe.pexpireat("temp", 1893456000000)
+            pipe.pttl("temp")
+            pipe.persist("temp")
+            results = pipe.execute()
+            assert len(results) == 14
+            assert results[0] == "OK"
+            assert results[1] == 1
+            assert results[2] == 5
+            assert results[3] == 4
+            assert results[4] == 1
+            assert results[5] == 5
+            assert results[6] == 5
+            assert results[7] == 1
+            assert results[8] == 60
+            assert results[9] == 1
+            assert results[10] == 1
+            assert results[11] == 1
+            assert results[12] == 60000
+            assert results[13] == 1

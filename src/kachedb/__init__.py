@@ -44,7 +44,7 @@ from .exceptions import (
 )
 from .pipeline import AsyncPipeline, Pipeline
 from .pool import AsyncConnectionPool, ConnectionPool
-from .semantic import SearchResult, SemanticCache
+from .semantic import AsyncSemanticCache, SearchResult, SemanticCache
 from .sglang import KacheDBRadixAdapter, KacheDBSGLangConnector
 from .tensor import attach_shm, detach_all, read_tensor, read_torch_tensor
 from .vllm import KacheDBConnector, KacheDBPrefixCache
@@ -54,6 +54,7 @@ __all__ = [
     "AsyncConnectionPool",
     "AsyncKacheClient",
     "AsyncPipeline",
+    "AsyncSemanticCache",
     "Connection",
     "ConnectionError",
     "ConnectionPool",
