@@ -18,7 +18,7 @@ logger = logging.getLogger("kachedb.vllm")
 
 # Dynamically attempt import of vLLM base connector
 try:
-    from vllm.distributed.kv_transfer.kv_connector.base import (  # type: ignore[import-not-found]
+    from vllm.distributed.kv_transfer.kv_connector.base import (
         KVConnectorBase,
     )
 except ImportError:

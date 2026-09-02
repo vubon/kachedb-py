@@ -349,6 +349,91 @@ class AsyncKacheClient:
         result = await self._execute("VDEL", index, item_id)
         return result == 1
 
+    async def vadd_batch(
+        self,
+        index: str | bytes,
+        items: list[
+            tuple[str | bytes, bytes | list[float] | tuple[float, ...], str | bytes | None]
+        ],
+        *,
+        ex: int | None = None,
+    ) -> int:
+        """Add multiple vector items in a single batch command asynchronously."""
+        import struct
+
+        args: list[str | bytes] = ["VADD_BATCH", index]
+        for item_id, vector, payload in items:
+            if isinstance(vector, (list, tuple)):
+                dim = len(vector)
+                vector_bytes = struct.pack(f"<{dim}f", *vector)
+            elif isinstance(vector, (bytes, bytearray)):
+                vector_bytes = bytes(vector)
+            else:
+                raise TypeError(f"Unsupported vector type: {type(vector)}")
+
+            p_val = payload if payload is not None else "-"
+            args.extend([item_id, vector_bytes, p_val])
+            if ex is not None:
+                args.extend(["EX", str(ex)])
+
+        result = await self._execute(*args)
+        return int(result) if isinstance(result, int) else 0
+
+    async def vsearch_batch(
+        self,
+        index: str | bytes,
+        query_vectors: list[bytes | list[float] | tuple[float, ...]],
+        *,
+        top_k: int = 1,
+        threshold: float = 0.0,
+    ) -> list[list[tuple[str | bytes, float, str | bytes | None]]]:
+        """Search multiple query vectors in a single batch command asynchronously."""
+        import struct
+
+        args: list[str | bytes] = ["VSEARCH_BATCH", index]
+        for q in query_vectors:
+            if isinstance(q, (list, tuple)):
+                q_bytes = struct.pack(f"<{len(q)}f", *q)
+            elif isinstance(q, (bytes, bytearray)):
+                q_bytes = bytes(q)
+            else:
+                raise TypeError(f"Unsupported vector type: {type(q)}")
+            args.append(q_bytes)
+
+        args.extend(["TOPK", str(top_k), "THRESHOLD", str(threshold)])
+        raw_batch = await self._execute(*args)
+        if not isinstance(raw_batch, list):
+            return []
+
+        all_results: list[list[tuple[str | bytes, float, str | bytes | None]]] = []
+        for raw_results in raw_batch:
+            if not isinstance(raw_results, list):
+                all_results.append([])
+                continue
+            query_res: list[tuple[str | bytes, float, str | bytes | None]] = []
+            for item in raw_results:
+                if isinstance(item, list) and len(item) >= 2:
+                    raw_id = item[0]
+                    item_id = raw_id if isinstance(raw_id, (str, bytes)) else str(raw_id)
+                    raw_score = item[1]
+                    try:
+                        score = float(
+                            raw_score.decode()
+                            if isinstance(raw_score, bytes)
+                            else float(str(raw_score))
+                        )
+                    except Exception:
+                        score = 0.0
+                    raw_payload = item[2] if len(item) > 2 else None
+                    payload = (
+                        raw_payload
+                        if isinstance(raw_payload, (str, bytes)) or raw_payload is None
+                        else str(raw_payload)
+                    )
+                    query_res.append((item_id, score, payload))
+            all_results.append(query_res)
+        return all_results
+
     async def vstats(self, index: str | bytes) -> dict[str, Any] | None:
         """Get statistics for a named vector index asynchronously."""
         raw = await self._execute("VSTATS", index)

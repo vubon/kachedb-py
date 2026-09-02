@@ -87,7 +87,7 @@ class FastEmbedAdapter:
 
     def __init__(self, model_name: str = "BAAI/bge-small-en-v1.5", **kwargs: Any) -> None:
         try:
-            from fastembed import TextEmbedding  # type: ignore[import-not-found]
+            from fastembed import TextEmbedding
         except ImportError as e:
             raise ImportError(
                 "FastEmbed is not installed. Install it via `pip install fastembed`"
@@ -107,7 +107,7 @@ class SentenceTransformersAdapter:
 
     def __init__(self, model_name: str = "all-MiniLM-L6-v2", **kwargs: Any) -> None:
         try:
-            from sentence_transformers import SentenceTransformer  # type: ignore[import-not-found]
+            from sentence_transformers import SentenceTransformer
         except ImportError as e:
             raise ImportError(
                 "SentenceTransformers is not installed. "
@@ -133,7 +133,7 @@ class OpenAIAdapter:
         **kwargs: Any,
     ) -> None:
         try:
-            from openai import OpenAI  # type: ignore[import-not-found]
+            from openai import OpenAI
         except ImportError as e:
             raise ImportError(
                 "OpenAI SDK is not installed. Install it via `pip install openai`"
