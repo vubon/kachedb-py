@@ -359,6 +359,9 @@ class AsyncKacheClient:
         ex: int | None = None,
     ) -> int:
         """Add multiple vector items in a single batch command asynchronously."""
+        if not items:
+            return 0
+
         import struct
 
         args: list[str | bytes] = ["VADD_BATCH", index]
@@ -388,6 +391,9 @@ class AsyncKacheClient:
         threshold: float = 0.0,
     ) -> list[list[tuple[str | bytes, float, str | bytes | None]]]:
         """Search multiple query vectors in a single batch command asynchronously."""
+        if not query_vectors:
+            return []
+
         import struct
 
         args: list[str | bytes] = ["VSEARCH_BATCH", index]
