@@ -5,6 +5,20 @@ All notable changes to the `kachedb` Python SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b2] — 2026-09-03
+
+### Added
+- **Batch Vector Operations (`KacheClient` & `AsyncKacheClient`):**
+  - Added `vadd_batch(index, items)` for bulk ingestion of vector embeddings and payloads in a single network round-trip.
+  - Added `vsearch_batch(index, query_vectors, top_k, threshold)` for multi-query simultaneous vector nearest-neighbor search.
+- **AI Ecosystem Integrations (`kachedb.integrations`):**
+  - **LangChain:** `KacheDBCache` (exact-match prompt caching) and `KacheDBSemanticCache` (SIMD vector similarity matching).
+  - **LlamaIndex:** `KacheDBKVStore` (key-value storage) and `KacheDBIndexStore` (index metadata storage).
+- **Type Checking & Embedder Robustness:**
+  - Dynamic type-safe fallback imports across `fastembed`, `sentence-transformers`, `openai`, and `vllm`.
+
+---
+
 ## [0.1.0b1] — 2026-08-30
 
 ### Added
