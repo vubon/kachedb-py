@@ -48,12 +48,24 @@ class ConnectionPool:
         max_connections: int = 10,
         socket_timeout: float | None = 5.0,
         decode_responses: bool = False,
+        password: str | None = None,
+        ssl: bool = False,
+        ssl_keyfile: str | None = None,
+        ssl_certfile: str | None = None,
+        ssl_ca_certs: str | None = None,
+        ssl_check_hostname: bool = True,
     ) -> None:
         self.host = host
         self.port = port
         self.max_connections = max_connections
         self.socket_timeout = socket_timeout
         self.decode_responses = decode_responses
+        self.password = password
+        self.ssl = ssl
+        self.ssl_keyfile = ssl_keyfile
+        self.ssl_certfile = ssl_certfile
+        self.ssl_ca_certs = ssl_ca_certs
+        self.ssl_check_hostname = ssl_check_hostname
 
         self._pool: queue.Queue[Connection] = queue.Queue(maxsize=max_connections)
         self._active_count = 0
@@ -96,8 +108,21 @@ class ConnectionPool:
             port=self.port,
             socket_timeout=self.socket_timeout,
             decode_responses=self.decode_responses,
+            ssl=self.ssl,
+            ssl_keyfile=self.ssl_keyfile,
+            ssl_certfile=self.ssl_certfile,
+            ssl_ca_certs=self.ssl_ca_certs,
+            ssl_check_hostname=self.ssl_check_hostname,
         )
         conn.connect()
+        if self.password is not None:
+            conn.send_command("AUTH", self.password)
+            res = conn.read_response()
+            if res != b"OK" and res != "OK":
+                conn.disconnect()
+                with self._lock:
+                    self._active_count -= 1
+                raise ConnectionError(f"Authentication failed: {res!r}")
         return conn
 
     def release_connection(self, conn: Connection) -> None:
@@ -149,11 +174,23 @@ class AsyncConnectionPool:
         *,
         max_connections: int = 10,
         decode_responses: bool = False,
+        password: str | None = None,
+        ssl: bool = False,
+        ssl_keyfile: str | None = None,
+        ssl_certfile: str | None = None,
+        ssl_ca_certs: str | None = None,
+        ssl_check_hostname: bool = True,
     ) -> None:
         self.host = host
         self.port = port
         self.max_connections = max_connections
         self.decode_responses = decode_responses
+        self.password = password
+        self.ssl = ssl
+        self.ssl_keyfile = ssl_keyfile
+        self.ssl_certfile = ssl_certfile
+        self.ssl_ca_certs = ssl_ca_certs
+        self.ssl_check_hostname = ssl_check_hostname
 
         self._pool: asyncio.Queue[
             tuple[asyncio.StreamReader, asyncio.StreamWriter, AsyncRespReader]
@@ -186,8 +223,28 @@ class AsyncConnectionPool:
                 )
             self._active_count += 1
 
+        ssl_ctx = None
+        if self.ssl:
+            import ssl as _ssl
+
+            ssl_ctx = _ssl.create_default_context(cafile=self.ssl_ca_certs)
+            if not self.ssl_check_hostname:
+                ssl_ctx.check_hostname = False
+                ssl_ctx.verify_mode = _ssl.CERT_NONE
+            if self.ssl_certfile and self.ssl_keyfile:
+                ssl_ctx.load_cert_chain(
+                    certfile=self.ssl_certfile, keyfile=self.ssl_keyfile
+                )
+
         try:
-            reader, writer = await asyncio.open_connection(self.host, self.port)
+            reader, writer = await asyncio.open_connection(
+                self.host,
+                self.port,
+                ssl=ssl_ctx,
+                server_hostname=self.host
+                if (self.ssl and self.ssl_check_hostname)
+                else None,
+            )
         except OSError as exc:
             async with self._lock:
                 self._active_count -= 1
@@ -196,6 +253,18 @@ class AsyncConnectionPool:
             ) from exc
 
         resp_reader = _AsyncRespReader(reader)
+        if self.password is not None:
+            from .resp import encode_command
+
+            writer.write(encode_command(["AUTH", self.password]))
+            await writer.drain()
+            res = await resp_reader.read_response()
+            if res != b"OK" and res != "OK":
+                writer.close()
+                async with self._lock:
+                    self._active_count -= 1
+                raise ConnectionError(f"Authentication failed: {res!r}")
+
         return reader, writer, resp_reader
 
     async def release_connection(

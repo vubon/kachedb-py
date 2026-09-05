@@ -44,6 +44,7 @@ from .exceptions import (
 )
 from .pipeline import AsyncPipeline, Pipeline
 from .pool import AsyncConnectionPool, ConnectionPool
+from .quantizer import sq8_decode, sq8_encode
 from .semantic import AsyncSemanticCache, SearchResult, SemanticCache
 from .sglang import KacheDBRadixAdapter, KacheDBSGLangConnector
 from .tensor import attach_shm, detach_all, read_tensor, read_torch_tensor
@@ -80,4 +81,6 @@ __all__ = [
     "detach_all",
     "read_tensor",
     "read_torch_tensor",
+    "sq8_decode",
+    "sq8_encode",
 ]

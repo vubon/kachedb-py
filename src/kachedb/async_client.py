@@ -20,6 +20,7 @@ Usage::
 
 from __future__ import annotations
 
+import contextlib
 from typing import TYPE_CHECKING, Any
 
 from .exceptions import ConnectionError
@@ -53,15 +54,29 @@ class AsyncKacheClient:
         *,
         decode_responses: bool = False,
         max_connections: int = 10,
+        password: str | None = None,
+        ssl: bool = False,
+        ssl_keyfile: str | None = None,
+        ssl_certfile: str | None = None,
+        ssl_ca_certs: str | None = None,
+        ssl_check_hostname: bool = True,
     ) -> None:
         self.host = host
         self.port = port
         self.decode_responses = decode_responses
+        self.password = password
+        self.ssl = ssl
         self._pool = AsyncConnectionPool(
             host=host,
             port=port,
             max_connections=max_connections,
             decode_responses=decode_responses,
+            password=password,
+            ssl=ssl,
+            ssl_keyfile=ssl_keyfile,
+            ssl_certfile=ssl_certfile,
+            ssl_ca_certs=ssl_ca_certs,
+            ssl_check_hostname=ssl_check_hostname,
         )
         self._reader: asyncio.StreamReader | None = None
         self._writer: asyncio.StreamWriter | None = None
@@ -452,3 +467,100 @@ class AsyncKacheClient:
             v = raw[i + 1]
             stats[k] = v
         return stats
+
+    async def auth(self, password: str, username: str | None = None) -> bool:
+        """Authenticate with the KacheDB server asynchronously.
+
+        Parameters
+        ----------
+        password : str
+            The authentication password.
+        username : str | None
+            Optional ACL username.
+        """
+        args: list[str | bytes] = ["AUTH"]
+        if username is not None:
+            args.append(username)
+        args.append(password)
+        result = await self._execute(*args)
+        return result == b"OK" or result == "OK"
+
+    async def bgrewriteaof(self) -> str:
+        """Rewrite the append-only file in the background asynchronously."""
+        result = await self._execute("BGREWRITEAOF")
+        if isinstance(result, bytes):
+            return result.decode("utf-8", errors="replace")
+        return str(result)
+
+    async def vindex_create(
+        self,
+        name: str | bytes,
+        dim: int,
+        m: int = 16,
+        ef_construction: int = 200,
+        ef_search: int = 50,
+        metric: str = "COSINE",
+        quantization: str = "SQ8",
+    ) -> bool:
+        """Create a new HNSW vector index asynchronously.
+
+        Parameters
+        ----------
+        name : str | bytes
+            Index name.
+        dim : int
+            Vector dimension.
+        m : int
+            Max bidirectional links per node (default: 16).
+        ef_construction : int
+            Size of dynamic candidate list during build (default: 200).
+        ef_search : int
+            Size of dynamic candidate list during search (default: 50).
+        metric : str
+            Distance metric ("COSINE", "L2", "IP").
+        quantization : str
+            Quantization type ("SQ8" or "NONE").
+        """
+        args: list[str | bytes] = [
+            "VINDEX",
+            "CREATE",
+            name,
+            "DIM",
+            str(dim),
+            "M",
+            str(m),
+            "EF_CONSTRUCTION",
+            str(ef_construction),
+            "EF_SEARCH",
+            str(ef_search),
+            "METRIC",
+            metric,
+            "QUANTIZATION",
+            quantization,
+        ]
+        result = await self._execute(*args)
+        return result == b"OK" or result == "OK"
+
+    async def vindex_drop(self, name: str | bytes) -> bool:
+        """Drop a vector index asynchronously.
+
+        Returns ``True`` if the index was found and deleted, ``False`` otherwise.
+        """
+        result = await self._execute("VINDEX", "DROP", name)
+        return bool(result == 1)
+
+    async def vindex_info(self, name: str | bytes) -> dict[str, Any] | None:
+        """Get detailed metadata and statistics for a vector index asynchronously."""
+        raw = await self._execute("VINDEX", "INFO", name)
+        if not isinstance(raw, list):
+            return None
+        info: dict[str, Any] = {}
+        for i in range(0, len(raw) - 1, 2):
+            raw_k = raw[i]
+            k = raw_k.decode() if isinstance(raw_k, bytes) else str(raw_k)
+            v = raw[i + 1]
+            if isinstance(v, bytes):
+                with contextlib.suppress(UnicodeDecodeError):
+                    v = v.decode("utf-8")
+            info[k] = v
+        return info

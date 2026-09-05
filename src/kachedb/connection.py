@@ -10,6 +10,7 @@ from __future__ import annotations
 import builtins
 import contextlib
 import socket
+import ssl
 
 from .exceptions import ConnectionError, TimeoutError
 from .resp import RespReader, RespValue, encode_command
@@ -28,6 +29,18 @@ class Connection:
         Socket timeout in seconds.  ``None`` for blocking without timeout.
     decode_responses : bool
         If ``True``, decode byte responses to UTF-8 strings.
+    ssl : bool
+        If ``True``, establish an encrypted TLS/SSL connection.
+    ssl_keyfile : str | None
+        Path to client TLS private key.
+    ssl_certfile : str | None
+        Path to client TLS certificate.
+    ssl_ca_certs : str | None
+        Path to CA certificates bundle.
+    ssl_cert_reqs : ssl.VerifyMode | int
+        Whether client requires server certificate verification.
+    ssl_check_hostname : bool
+        Whether to verify server hostname in TLS certificate.
     """
 
     __slots__ = (
@@ -37,6 +50,12 @@ class Connection:
         "host",
         "port",
         "socket_timeout",
+        "ssl",
+        "ssl_ca_certs",
+        "ssl_cert_reqs",
+        "ssl_certfile",
+        "ssl_check_hostname",
+        "ssl_keyfile",
     )
 
     def __init__(
@@ -46,11 +65,23 @@ class Connection:
         *,
         socket_timeout: float | None = 5.0,
         decode_responses: bool = False,
+        ssl: bool = False,
+        ssl_keyfile: str | None = None,
+        ssl_certfile: str | None = None,
+        ssl_ca_certs: str | None = None,
+        ssl_cert_reqs: ssl.VerifyMode | int = ssl.CERT_REQUIRED,
+        ssl_check_hostname: bool = True,
     ) -> None:
         self.host = host
         self.port = port
         self.socket_timeout = socket_timeout
         self.decode_responses = decode_responses
+        self.ssl = ssl
+        self.ssl_keyfile = ssl_keyfile
+        self.ssl_certfile = ssl_certfile
+        self.ssl_ca_certs = ssl_ca_certs
+        self.ssl_cert_reqs = ssl_cert_reqs
+        self.ssl_check_hostname = ssl_check_hostname
         self._sock: socket.socket | None = None
         self._reader: RespReader | None = None
 
@@ -70,6 +101,23 @@ class Connection:
                 timeout=self.socket_timeout,
             )
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            if self.ssl:
+                context = ssl.create_default_context(
+                    cafile=self.ssl_ca_certs,
+                )
+                if not self.ssl_check_hostname:
+                    context.check_hostname = False
+                if self.ssl_cert_reqs == ssl.CERT_NONE:
+                    context.verify_mode = ssl.CERT_NONE
+                if self.ssl_certfile and self.ssl_keyfile:
+                    context.load_cert_chain(
+                        certfile=self.ssl_certfile,
+                        keyfile=self.ssl_keyfile,
+                    )
+                sock = context.wrap_socket(
+                    sock,
+                    server_hostname=self.host if self.ssl_check_hostname else None,
+                )
             self._sock = sock
             self._reader = RespReader(sock)
         except OSError as exc:
