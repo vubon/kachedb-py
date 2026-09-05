@@ -232,18 +232,14 @@ class AsyncConnectionPool:
                 ssl_ctx.check_hostname = False
                 ssl_ctx.verify_mode = _ssl.CERT_NONE
             if self.ssl_certfile and self.ssl_keyfile:
-                ssl_ctx.load_cert_chain(
-                    certfile=self.ssl_certfile, keyfile=self.ssl_keyfile
-                )
+                ssl_ctx.load_cert_chain(certfile=self.ssl_certfile, keyfile=self.ssl_keyfile)
 
         try:
             reader, writer = await asyncio.open_connection(
                 self.host,
                 self.port,
                 ssl=ssl_ctx,
-                server_hostname=self.host
-                if (self.ssl and self.ssl_check_hostname)
-                else None,
+                server_hostname=self.host if (self.ssl and self.ssl_check_hostname) else None,
             )
         except OSError as exc:
             async with self._lock:
