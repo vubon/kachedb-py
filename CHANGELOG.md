@@ -5,6 +5,22 @@ All notable changes to the `kachedb` Python SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b3] — 2026-09-06
+
+### Added
+- **Phase 3 SQ8 Vector Quantization (`kachedb.vector` & `kachedb.semantic`):**
+  - Added support for 8-bit Scalar Quantization (SQ8) compressing vector embeddings with 75% memory footprint reduction.
+  - Client APIs and semantic caching pipelines seamlessly handle quantized vector queries.
+- **HNSW Vector Indexing Commands:**
+  - Added `vindex_create` support for Hierarchical Navigable Small World (`hnsw`) index type with configurable `m` and `ef_construction` parameters.
+- **TLS 1.3 Transport Security & Mutual TLS (`kachedb.ConnectionPool`):**
+  - Added native TLS 1.3 encryption across synchronous and asynchronous connection pools (`ssl=True`).
+  - Added support for CA certificates (`ssl_ca_certs`), client certificate chains (`ssl_certfile`, `ssl_keyfile`), and hostname verification (`ssl_check_hostname`).
+- **AOF & Administrative Commands:**
+  - Added `bgrewriteaof()` command triggering online AOF journal compaction.
+
+---
+
 ## [0.1.0b2] — 2026-09-03
 
 ### Added
