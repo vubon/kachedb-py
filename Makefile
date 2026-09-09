@@ -38,7 +38,25 @@ test-unit: venv-check
 	$(PYTEST) tests/ -m "not integration" -v
 
 test-all: venv-check
-	$(PYTEST) tests/ -v
+	@SERVER_PID=""; \
+	if ! nc -z 127.0.0.1 6379 2>/dev/null; then \
+		if [ -f ../kachedb/target/release/kachedb-server ]; then \
+			echo "⚡ Auto-launching local kachedb-server on 127.0.0.1:6379..."; \
+			../kachedb/target/release/kachedb-server >/dev/null 2>&1 & \
+			SERVER_PID=$$!; \
+			sleep 1; \
+		else \
+			echo "❌ Error: kachedb-server binary not found and port 6379 is not open."; \
+			exit 1; \
+		fi; \
+	fi; \
+	$(PYTEST) tests/ -v; \
+	STATUS=$$?; \
+	if [ -n "$$SERVER_PID" ]; then \
+		echo "🛑 Stopping temporary kachedb-server (PID $$SERVER_PID)..."; \
+		kill $$SERVER_PID 2>/dev/null || true; \
+	fi; \
+	exit $$STATUS
 
 coverage: venv-check
 	@if nc -z 127.0.0.1 6379 2>/dev/null; then \
@@ -48,6 +66,27 @@ coverage: venv-check
 		echo "ℹ️  No live KacheDB daemon on 127.0.0.1:6379. Running coverage report on unit tests..."; \
 		$(PYTEST) --cov=src/kachedb --cov-report=term-missing tests/ -m "not integration"; \
 	fi
+
+coverage-all: venv-check
+	@SERVER_PID=""; \
+	if ! nc -z 127.0.0.1 6379 2>/dev/null; then \
+		if [ -f ../kachedb/target/release/kachedb-server ]; then \
+			echo "⚡ Auto-launching local kachedb-server on 127.0.0.1:6379..."; \
+			../kachedb/target/release/kachedb-server >/dev/null 2>&1 & \
+			SERVER_PID=$$!; \
+			sleep 1; \
+		else \
+			echo "❌ Error: kachedb-server binary not found and port 6379 is not open."; \
+			exit 1; \
+		fi; \
+	fi; \
+	$(PYTEST) --cov=src/kachedb --cov-report=term-missing tests/; \
+	STATUS=$$?; \
+	if [ -n "$$SERVER_PID" ]; then \
+		echo "🛑 Stopping temporary kachedb-server (PID $$SERVER_PID)..."; \
+		kill $$SERVER_PID 2>/dev/null || true; \
+	fi; \
+	exit $$STATUS
 
 lint: venv-check
 	$(RUFF) check src/ tests/
