@@ -70,6 +70,16 @@ class TestSyncIntegration:
             assert client.get("integration:binary") == binary_data
             client.delete("integration:binary")
 
+    def test_admin_commands(self) -> None:
+        with KacheClient(port=TEST_PORT) as client:
+            client.set("integration:admin_key", "test_val")
+            assert client.dbsize() >= 1
+            assert client.type("integration:admin_key") == "string"
+            assert client.type("integration:nonexistent_xyz") == "none"
+            assert client.flushdb() is True
+            assert client.dbsize() == 0
+            assert client.flushall() is True
+
 
 class TestAsyncIntegration:
     """Integration tests using the async client."""
@@ -98,4 +108,13 @@ class TestAsyncIntegration:
             assert results[1] == b"v1"
             await client.delete("integration:ap1")
 
-            await client.delete("integration:ap1")
+    @pytest.mark.asyncio
+    async def test_async_admin_commands(self) -> None:
+        async with AsyncKacheClient(port=TEST_PORT) as client:
+            await client.set("integration:async_admin_key", "val")
+            assert await client.dbsize() >= 1
+            assert await client.type("integration:async_admin_key") == "string"
+            assert await client.type("integration:async_missing_key") == "none"
+            assert await client.flushdb() is True
+            assert await client.dbsize() == 0
+            assert await client.flushall() is True

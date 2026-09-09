@@ -163,3 +163,31 @@ class TestKacheClientExtendedCommands:
         with KacheClient(port=port) as client:
             info = client.info()
             assert "kachedb_version:0.1.0" in info
+
+    def test_dbsize(self, mock_server: MockKacheDBServer) -> None:
+        mock_server.program_responses(resp_integer(42))
+        port = mock_server.start()
+
+        with KacheClient(port=port) as client:
+            assert client.dbsize() == 42
+
+    def test_type(self, mock_server: MockKacheDBServer) -> None:
+        mock_server.program_responses(
+            resp_simple_string("string"),
+            resp_simple_string("vector"),
+            resp_simple_string("none"),
+        )
+        port = mock_server.start()
+
+        with KacheClient(port=port) as client:
+            assert client.type("str_key") == "string"
+            assert client.type("vec_key") == "vector"
+            assert client.type("missing") == "none"
+
+    def test_flushdb_and_flushall(self, mock_server: MockKacheDBServer) -> None:
+        mock_server.program_responses(resp_simple_string("OK"), resp_simple_string("OK"))
+        port = mock_server.start()
+
+        with KacheClient(port=port) as client:
+            assert client.flushdb() is True
+            assert client.flushall() is True

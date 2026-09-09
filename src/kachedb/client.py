@@ -304,6 +304,28 @@ class KacheClient:
             return result.decode("utf-8", errors="replace")
         return str(result) if result is not None else ""
 
+    def dbsize(self) -> int:
+        """Return the total number of keys stored in the database."""
+        result = self._execute("DBSIZE")
+        return int(result) if isinstance(result, int) else 0
+
+    def type(self, key: str | bytes) -> str:
+        """Return the string representation of the type of the value stored at *key*."""
+        result = self._execute("TYPE", key)
+        if isinstance(result, bytes):
+            return result.decode("utf-8", errors="replace")
+        return str(result) if result is not None else "none"
+
+    def flushdb(self) -> bool:
+        """Delete all keys in the current database."""
+        result = self._execute("FLUSHDB")
+        return result in ("OK", b"OK", True)
+
+    def flushall(self) -> bool:
+        """Delete all keys in all databases."""
+        result = self._execute("FLUSHALL")
+        return result in ("OK", b"OK", True)
+
     # ── Pipeline ──────────────────────────────────────────────────────────
 
     def pipeline(self) -> Pipeline:

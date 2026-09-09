@@ -12,7 +12,7 @@ requires-python = ">=3.10"
 authors = [{ name = "KacheDB Core Team" }]
 keywords = ["kachedb", "cache", "redis", "kv-cache", "llm", "tensor", "zero-copy", "vllm", "sglang", "radix-attention"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: Apache Software License",
@@ -47,7 +47,7 @@ dev = [
 [project.urls]
 Homepage = "https://github.com/vubon/kachedb-py"
 Repository = "https://github.com/vubon/kachedb-py"
-Documentation = "https://github.com/vubon/kachedb-py#readme"
+Documentation = "https://vubon.github.io/kachedb/"
 "Bug Tracker" = "https://github.com/vubon/kachedb-py/issues"
 "KacheDB Server" = "https://github.com/vubon/kachedb"
 

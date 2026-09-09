@@ -39,6 +39,22 @@ class TestEncodeCommand:
         result = encode_command(["DEL", "key1", "key2"])
         assert result.startswith(b"*3\r\n")
 
+    def test_dbsize(self) -> None:
+        result = encode_command(["DBSIZE"])
+        assert result == b"*1\r\n$6\r\nDBSIZE\r\n"
+
+    def test_type(self) -> None:
+        result = encode_command(["TYPE", "my_key"])
+        assert result == b"*2\r\n$4\r\nTYPE\r\n$6\r\nmy_key\r\n"
+
+    def test_flushdb(self) -> None:
+        result = encode_command(["FLUSHDB"])
+        assert result == b"*1\r\n$7\r\nFLUSHDB\r\n"
+
+    def test_flushall(self) -> None:
+        result = encode_command(["FLUSHALL"])
+        assert result == b"*1\r\n$8\r\nFLUSHALL\r\n"
+
 
 class TestEncodeCommands:
     def test_pipeline_encoding(self) -> None:

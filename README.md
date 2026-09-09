@@ -228,7 +228,7 @@ cd kachedb-py
 # Install in editable dev mode with all extras
 pip install -e ".[all,dev]"
 
-# Run full unit test suite (85 tests)
+# Run full test suite (124+ tests)
 pytest tests/ -v
 
 # Code formatting & linting
@@ -243,6 +243,7 @@ mypy src/
 
 ## 🔗 Documentation & Guides
 
+- 🌐 [Official KacheDB Documentation](https://vubon.github.io/kachedb/)
 - 📘 [vLLM Production Integration Guide](docs/guides/vllm_integration_guide.md)
 - 📗 [SGLang Production Integration Guide](docs/guides/sglang_integration_guide.md)
 - 🏆 [Master Proof-of-Speed Benchmarks](https://github.com/vubon/database/blob/main/experiments/master_sglang_kachedb_speed_benchmark.md)

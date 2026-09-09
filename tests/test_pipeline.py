@@ -121,3 +121,22 @@ class TestPipeline:
             assert results[11] == 1
             assert results[12] == 60000
             assert results[13] == 1
+
+    def test_pipeline_admin_commands(self, mock_server: MockKacheDBServer) -> None:
+        mock_server.program_responses(
+            resp_integer(10)
+            + resp_simple_string("string")
+            + resp_simple_string("OK")
+            + resp_simple_string("OK")
+        )
+        port = mock_server.start()
+
+        with KacheClient(port=port) as client:
+            pipe = client.pipeline()
+            pipe.dbsize().type("mykey").flushdb().flushall()
+            results = pipe.execute()
+            assert len(results) == 4
+            assert results[0] == 10
+            assert results[1] == "string"
+            assert results[2] == "OK"
+            assert results[3] == "OK"

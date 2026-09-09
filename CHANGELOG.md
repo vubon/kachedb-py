@@ -5,6 +5,19 @@ All notable changes to the `kachedb` Python SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0] — 2026-09-09
+
+### Added
+- **Redis Admin & Keyspace Introspection Primitives (`KacheClient`, `AsyncKacheClient`, `Pipeline`, `AsyncPipeline`):**
+  - Added `dbsize()`: returns the total number of keys stored in the database.
+  - Added `type(key)`: returns the data type of the key (`"string"`, `"vector"`, or `"none"`).
+  - Added `flushdb()` and `flushall()`: clears in-memory keyspace and returns `True`.
+- **Server Parity & Compatibility:**
+  - 100% feature parity with KacheDB Server `v0.1.0` production release.
+  - Aligned documentation links with the official docs site at `https://vubon.github.io/kachedb/`.
+
+---
+
 ## [0.1.0b3] — 2026-09-06
 
 ### Added

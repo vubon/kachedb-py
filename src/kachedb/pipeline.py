@@ -148,6 +148,22 @@ class Pipeline:
         """Queue a PERSIST command."""
         return self._queue("PERSIST", key)
 
+    def dbsize(self) -> Pipeline:
+        """Queue a DBSIZE command."""
+        return self._queue("DBSIZE")
+
+    def type(self, key: str | bytes) -> Pipeline:
+        """Queue a TYPE command."""
+        return self._queue("TYPE", key)
+
+    def flushdb(self) -> Pipeline:
+        """Queue a FLUSHDB command."""
+        return self._queue("FLUSHDB")
+
+    def flushall(self) -> Pipeline:
+        """Queue a FLUSHALL command."""
+        return self._queue("FLUSHALL")
+
     # ── Execution ─────────────────────────────────────────────────────────
 
     def execute(self) -> list[RespValue]:
@@ -311,6 +327,22 @@ class AsyncPipeline:
     def persist(self, key: str | bytes) -> AsyncPipeline:
         """Queue a PERSIST command."""
         return self._queue("PERSIST", key)
+
+    def dbsize(self) -> AsyncPipeline:
+        """Queue a DBSIZE command."""
+        return self._queue("DBSIZE")
+
+    def type(self, key: str | bytes) -> AsyncPipeline:
+        """Queue a TYPE command."""
+        return self._queue("TYPE", key)
+
+    def flushdb(self) -> AsyncPipeline:
+        """Queue a FLUSHDB command."""
+        return self._queue("FLUSHDB")
+
+    def flushall(self) -> AsyncPipeline:
+        """Queue a FLUSHALL command."""
+        return self._queue("FLUSHALL")
 
     async def execute(self) -> list[RespValue]:
         """Send all queued commands and collect responses."""
