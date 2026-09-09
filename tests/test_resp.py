@@ -153,3 +153,76 @@ class TestRespReader:
         reader = RespReader(client_sock)
         with pytest.raises(ProtocolError, match="Connection closed"):
             reader.read_response()
+
+    def test_resp3_null_and_compaction(self) -> None:
+        from tests.test_resp import _make_reader
+
+        reader = _make_reader(b"_\r\n")
+        assert reader.read_response() is None
+
+        # Compaction (> 4096 bytes)
+        payload = b"y" * 5000
+        reader2 = _make_reader(b"$5000\r\n" + payload + b"\r\n+OK\r\n")
+        assert reader2.read_response() == payload
+        assert reader2.read_response() == "OK"
+
+
+class TestAsyncRespReader:
+    @pytest.mark.asyncio
+    async def test_async_reader_types(self) -> None:
+        import asyncio
+
+        from kachedb.resp import AsyncRespReader
+
+        stream = asyncio.StreamReader()
+        stream.feed_data(
+            b"+OK\r\n:42\r\n$5\r\nhello\r\n$-1\r\n*-1\r\n*2\r\n$1\r\na\r\n$1\r\nb\r\n_\r\n"
+        )
+        stream.feed_eof()
+
+        reader = AsyncRespReader(stream)
+        assert await reader.read_response() == "OK"
+        assert await reader.read_response() == 42
+        assert await reader.read_response() == b"hello"
+        assert await reader.read_response() is None
+        assert await reader.read_response() is None
+        assert await reader.read_response() == [b"a", b"b"]
+        assert await reader.read_response() is None
+
+    @pytest.mark.asyncio
+    async def test_async_reader_errors_and_compaction(self) -> None:
+        import asyncio
+
+        from kachedb.resp import AsyncRespReader
+
+        # Error response
+        stream = asyncio.StreamReader()
+        stream.feed_data(b"-ERR bad\r\n")
+        stream.feed_eof()
+        reader = AsyncRespReader(stream)
+        with pytest.raises(ResponseError, match="bad"):
+            await reader.read_response()
+
+        # Unknown marker
+        stream2 = asyncio.StreamReader()
+        stream2.feed_data(b"@unknown\r\n")
+        stream2.feed_eof()
+        reader2 = AsyncRespReader(stream2)
+        with pytest.raises(ProtocolError, match="Unknown RESP type marker"):
+            await reader2.read_response()
+
+        # Closed stream
+        stream3 = asyncio.StreamReader()
+        stream3.feed_eof()
+        reader3 = AsyncRespReader(stream3)
+        with pytest.raises(ProtocolError, match="Connection closed"):
+            await reader3.read_response()
+
+        # Compaction (> 4096 bytes)
+        stream4 = asyncio.StreamReader()
+        payload = b"x" * 5000
+        stream4.feed_data(b"$5000\r\n" + payload + b"\r\n+NEXT\r\n")
+        stream4.feed_eof()
+        reader4 = AsyncRespReader(stream4)
+        assert await reader4.read_response() == payload
+        assert await reader4.read_response() == "NEXT"

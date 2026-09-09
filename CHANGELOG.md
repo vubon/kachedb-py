@@ -5,6 +5,23 @@ All notable changes to the `kachedb` Python SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] — 2026-09-09
+
+### Fixed
+- **PyTorch Non-Writable Buffer Warning (`TensorCodec.from_buffer`):**
+  - Resolved PyTorch 2.0+ `UserWarning: The given buffer is not writable` when reconstructing tensors from immutable `bytes` or read-only `memoryview`.
+  - Converts immutable inputs safely to `bytearray` while maintaining zero-copy semantics for mutable shared memory buffers (`mmap.mmap`).
+
+### Added & Improved
+- **Code Coverage Expansion (97% Total Coverage):**
+  - Added exhaustive tests in `tests/test_connection.py` covering low-level socket connections, handshake timeouts, and retry behavior.
+  - Expanded pipeline execution and error handling tests in `tests/test_pipeline.py`.
+  - Added full edge-case coverage for synchronous and asynchronous connection pools (`tests/test_pool.py`).
+  - Added tests for `AsyncKacheClient` transaction rollbacks, binary value serialization, and cluster introspection commands.
+  - Overall statement coverage increased to 97% with zero test warnings across 210 tests.
+
+---
+
 ## [0.1.0] — 2026-09-09
 
 ### Added

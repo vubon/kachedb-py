@@ -189,6 +189,9 @@ class TensorCodec:
         import numpy as np
         import torch
 
+        if isinstance(buffer, bytes) or getattr(buffer, "readonly", False):
+            buffer = bytearray(buffer)
+
         num_elements = int(np.prod(shape))
 
         tensor = (

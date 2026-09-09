@@ -33,6 +33,23 @@ class InMemoryKacheClient:
         self._kv[key] = val_bytes
         return True
 
+    def pipeline(self) -> Any:
+        class MockPipe:
+            def __init__(self, parent: Any) -> None:
+                self.parent = parent
+                self.cmds: list[tuple[str, Any]] = []
+
+            def set(self, k: str, v: Any) -> MockPipe:
+                self.cmds.append((k, v))
+                return self
+
+            def execute(self) -> list[Any]:
+                for k, v in self.cmds:
+                    self.parent.set(k, v)
+                return [True] * len(self.cmds)
+
+        return MockPipe(self)
+
     def delete(self, *keys: str) -> int:
         count = 0
         for k in keys:
@@ -103,8 +120,17 @@ def test_langchain_exact_cache(client: KacheClient) -> None:
     assert len(res) == 1
     assert res[0].text == "Bonjour"
 
+    # Non-JSON cached fallback
+    client.set(cache._key("raw", "model"), "plain text completion")
+    raw_res = cache.lookup("raw", "model")
+    assert raw_res is not None
+    assert raw_res[0].text == "plain text completion"
 
-def test_langchain_semantic_cache(client: KacheClient) -> None:
+    # Clear
+    cache.clear()
+
+
+def test_langchain_semantic_cache(client: KacheClient, monkeypatch: pytest.MonkeyPatch) -> None:
     embedder = MockEmbedder(dimension=64)
     cache = KacheDBSemanticCache(
         client=client,
@@ -123,8 +149,24 @@ def test_langchain_semantic_cache(client: KacheClient) -> None:
     assert res is not None
     assert "Paris" in res[0].text
 
+    # Cache miss
+    miss = cache.lookup("Completely unknown question about rocket propulsion", "gpt-4o")
+    assert miss is None
 
-def test_llamaindex_kv_and_index_store(client: KacheClient) -> None:
+    # Clear
+    cache.clear()
+
+    # Auto-selected embedder constructor branch
+    from unittest.mock import MagicMock
+
+    mock_kc = MagicMock()
+    auto_cache = KacheDBSemanticCache(client=mock_kc, embedder=None)
+    assert auto_cache.semantic_cache.embedder is not None
+
+
+def test_llamaindex_kv_and_index_store(
+    client: KacheClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     kvstore = KacheDBKVStore(client=client, namespace="test:llama:kv")
     index_store = KacheDBIndexStore(kvstore=kvstore)
 
@@ -134,6 +176,15 @@ def test_llamaindex_kv_and_index_store(client: KacheClient) -> None:
     retrieved = kvstore.get("doc_123")
     assert retrieved == doc_data
 
+    # put_all
+    kvstore.put_all([("doc_2", {"a": 1}), ("doc_3", {"b": 2})])
+    assert kvstore.get("doc_2") == {"a": 1}
+    assert kvstore.get("doc_3") == {"b": 2}
+
+    # Corrupt / non-JSON value returns None
+    client.set(kvstore._format_key("corrupt", "data"), "invalid json {{{{")
+    assert kvstore.get("corrupt") is None
+
     # Index store
     index_meta = {"index_id": "idx_1", "type": "vector", "nodes": 100}
     index_store.put("idx_1", index_meta)
@@ -142,3 +193,10 @@ def test_llamaindex_kv_and_index_store(client: KacheClient) -> None:
     # Delete
     assert index_store.delete("idx_1") is True
     assert index_store.get("idx_1") is None
+
+    # Default constructors with None
+    from unittest.mock import MagicMock
+
+    monkeypatch.setattr("kachedb.integrations.llamaindex.KacheClient", MagicMock)
+    default_store = KacheDBIndexStore()
+    assert default_store.kvstore is not None

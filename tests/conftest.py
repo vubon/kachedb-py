@@ -25,6 +25,7 @@ class MockKacheDBServer:
         self._thread: threading.Thread | None = None
         self._responses: list[bytes] = []
         self._received_commands: list[bytes] = []
+        self._running = True
         self.host = "127.0.0.1"
         self.port = 0  # OS assigns free port
 
@@ -38,8 +39,8 @@ class MockKacheDBServer:
         self._server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._server_sock.bind((self.host, 0))
         self.port = self._server_sock.getsockname()[1]
-        self._server_sock.listen(1)
-        self._server_sock.settimeout(5.0)
+        self._server_sock.listen(5)
+        self._server_sock.settimeout(0.5)
 
         self._thread = threading.Thread(target=self._serve, daemon=True)
         self._thread.start()
@@ -47,14 +48,19 @@ class MockKacheDBServer:
 
     def _serve(self) -> None:
         assert self._server_sock is not None
-        try:
-            conn, _ = self._server_sock.accept()
+        while self._running:
+            try:
+                conn, _ = self._server_sock.accept()
+            except (OSError, TimeoutError):
+                if not self._running:
+                    break
+                continue
             self._client_sock = conn
             conn.settimeout(5.0)
 
             # Read incoming data (commands from client).
             try:
-                while True:
+                while self._running:
                     data = conn.recv(65536)
                     if not data:
                         break
@@ -66,11 +72,13 @@ class MockKacheDBServer:
                         conn.sendall(response)
             except (OSError, TimeoutError):
                 pass
-        except (OSError, TimeoutError):
-            pass
+            finally:
+                with contextlib.suppress(OSError):
+                    conn.close()
 
     def stop(self) -> None:
         """Shut down the mock server."""
+        self._running = False
         if self._client_sock:
             with contextlib.suppress(OSError):
                 self._client_sock.close()

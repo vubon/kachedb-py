@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
+import pytest
+
 from kachedb import KacheClient
 from tests.conftest import (
     MockKacheDBServer,
@@ -191,3 +195,178 @@ class TestKacheClientExtendedCommands:
         with KacheClient(port=port) as client:
             assert client.flushdb() is True
             assert client.flushall() is True
+
+
+class TestKacheClientAdvanced:
+    def test_client_per_call_and_disconnect_all(self, mock_server: MockKacheDBServer) -> None:
+        mock_server.program_responses(
+            resp_simple_string("PONG"),
+            resp_simple_string("PONG"),  # For pool health check on re-checkout
+            resp_bulk_string(b"hello"),
+        )
+        port = mock_server.start()
+
+        client = KacheClient(port=port, decode_responses=True)
+        # Call without connect() or with client:
+        assert client.ping() == "PONG"
+        assert client.ping(message="hello") == "hello"
+        client.disconnect_all()
+
+    def test_client_execute_error_discards_conn(self) -> None:
+        client = KacheClient(port=6379)
+        mock_conn = MagicMock()
+        mock_conn.send_command.side_effect = RuntimeError("socket error")
+        client._conn = mock_conn
+
+        with pytest.raises(RuntimeError, match="socket error"):
+            client._execute("PING")
+
+        mock_conn.disconnect.assert_called_once()
+
+    def test_client_mset_empty_and_numeric_branches(self, mock_server: MockKacheDBServer) -> None:
+        mock_server.program_responses(
+            resp_integer(8),
+            resp_integer(5),
+            resp_integer(50000),
+            resp_bulk_string(b"# Server\r\nversion:0.1.0"),
+        )
+        port = mock_server.start()
+
+        with KacheClient(port=port) as client:
+            assert client.mset({}) is True
+            assert client.decr("counter", 2) == 8
+            assert client.decrby("counter", 3) == 5
+            assert client.pttl("temp") == 50000
+            info = client.info(section="server")
+            assert "version:0.1.0" in info
+
+    def test_client_batch_vectors(self, mock_server: MockKacheDBServer) -> None:
+        import struct
+
+        mock_server.program_responses(
+            resp_integer(2),
+            resp_array(
+                resp_array(
+                    resp_array(
+                        resp_bulk_string(b"doc1"),
+                        resp_bulk_string(b"0.99"),
+                        resp_bulk_string(b"res1"),
+                    )
+                )
+            ),
+        )
+        port = mock_server.start()
+
+        with KacheClient(port=port) as client:
+            assert client.vadd_batch("idx", []) == 0
+            assert client.vsearch_batch("idx", []) == []
+
+            with pytest.raises(TypeError, match="Unsupported vector type"):
+                client.vadd_batch("idx", [("id1", 12345, "payload")])  # type: ignore[list-item]
+
+            with pytest.raises(TypeError, match="Unsupported vector type"):
+                client.vsearch_batch("idx", [12345])  # type: ignore[list-item]
+
+            v_bytes = struct.pack("<4f", 0.1, 0.2, 0.3, 0.4)
+            items = [
+                ("doc1", [0.1, 0.2, 0.3, 0.4], "res1"),
+                ("doc2", v_bytes, None),
+            ]
+            added = client.vadd_batch("idx", items, ex=60)
+            assert added == 2
+
+            search_res = client.vsearch_batch("idx", [[0.1, 0.2, 0.3, 0.4], v_bytes])
+            assert len(search_res) == 1
+            assert search_res[0][0][0] == b"doc1"
+
+    def test_client_vector_types_and_errors(self, mock_server: MockKacheDBServer) -> None:
+        import struct
+
+        mock_server.program_responses(
+            resp_integer(1),
+            resp_array(
+                resp_array(
+                    resp_bulk_string(b"doc1"),
+                    resp_bulk_string(b"0.95"),
+                    resp_bulk_string(b"p1"),
+                )
+            ),
+            resp_bulk_string(b"ERROR_NOT_A_LIST"),
+            resp_bulk_string(b"ERROR_NOT_A_LIST"),
+        )
+        port = mock_server.start()
+
+        with KacheClient(port=port) as client:
+            with pytest.raises(TypeError, match="Unsupported vector type"):
+                client.vadd("idx", "doc1", "invalid_type")  # type: ignore[arg-type]
+
+            with pytest.raises(TypeError, match="Unsupported vector type"):
+                client.vsearch("idx", "invalid_type")  # type: ignore[arg-type]
+
+            raw_v = struct.pack("<2f", 1.0, 2.0)
+            assert client.vadd("idx", "doc1", raw_v) is True
+
+            res = client.vsearch("idx", raw_v)
+            assert len(res) == 1
+            assert res[0][0] == b"doc1"
+
+            assert client.vstats("idx") is None
+            assert client.vindex_info("idx") is None
+
+    def test_client_auth_and_admin(self, mock_server: MockKacheDBServer) -> None:
+        mock_server.program_responses(
+            resp_simple_string("OK"),
+            resp_simple_string("OK"),
+            resp_bulk_string(b"Background append only file rewriting started"),
+        )
+        port = mock_server.start()
+
+        with KacheClient(port=port) as client:
+            assert client.auth("secret") is True
+            assert client.auth("secret", username="user1") is True
+            bg = client.bgrewriteaof()
+            assert "rewriting started" in bg
+
+    def test_client_vector_and_index_lifecycle(self, mock_server: MockKacheDBServer) -> None:
+        mock_server.program_responses(
+            resp_simple_string("OK"),
+            resp_array(
+                resp_array(
+                    resp_bulk_string(b"doc1"),
+                    resp_bulk_string(b"0.98"),
+                    resp_bulk_string(b"payload"),
+                )
+            ),
+            resp_array(
+                resp_bulk_string(b"dimension"),
+                resp_integer(128),
+                resp_bulk_string(b"total_vectors"),
+                resp_integer(1),
+            ),
+            resp_integer(1),
+            resp_simple_string("OK"),
+            resp_array(
+                resp_bulk_string(b"dimension"),
+                resp_integer(128),
+                resp_bulk_string(b"metric"),
+                resp_bulk_string(b"cosine"),
+            ),
+            resp_integer(1),
+        )
+        port = mock_server.start()
+
+        with KacheClient(port=port) as client:
+            assert client.vadd("idx", "doc1", [0.1, 0.2], payload="payload", ex=3600) is True
+            matches = client.vsearch("idx", [0.1, 0.2])
+            assert len(matches) == 1
+            assert matches[0][0] == b"doc1"
+
+            st = client.vstats("idx")
+            assert st == {"dimension": 128, "total_vectors": 1}
+
+            assert client.vdel("idx", "doc1") is True
+
+            assert client.vindex_create("vidx", 128) is True
+            info = client.vindex_info("vidx")
+            assert info == {"dimension": 128, "metric": "cosine"}
+            assert client.vindex_drop("vidx") is True
