@@ -10,8 +10,9 @@ MYPY := $(VENV)/bin/mypy
 
 help:
 	@echo "KacheDB Python SDK Makefile"
-	@echo "  make test        - Run all tests (requires running kachedb-server)"
-	@echo "  make test-unit   - Run unit tests without live daemon"
+	@echo "  make test        - Run tests (auto-detects live server for integration tests)"
+	@echo "  make test-unit   - Run unit tests only (no daemon needed)"
+	@echo "  make test-all    - Force run all tests including integration tests"
 	@echo "  make coverage    - Run tests with code coverage report"
 	@echo "  make lint        - Run ruff check and format check"
 	@echo "  make format      - Autoformat code with ruff"
@@ -25,13 +26,28 @@ venv-check:
 	fi
 
 test: venv-check
-	$(PYTEST) tests/ -v
+	@if nc -z 127.0.0.1 6379 2>/dev/null; then \
+		echo "⚡ Live KacheDB daemon detected on 127.0.0.1:6379. Running full test suite (unit + integration)..."; \
+		$(PYTEST) tests/ -v; \
+	else \
+		echo "ℹ️  No live KacheDB daemon on 127.0.0.1:6379. Running unit tests only (start server to include integration tests)..."; \
+		$(PYTEST) tests/ -m "not integration" -v; \
+	fi
 
 test-unit: venv-check
 	$(PYTEST) tests/ -m "not integration" -v
 
+test-all: venv-check
+	$(PYTEST) tests/ -v
+
 coverage: venv-check
-	$(PYTEST) --cov=src/kachedb --cov-report=term-missing tests/
+	@if nc -z 127.0.0.1 6379 2>/dev/null; then \
+		echo "⚡ Live KacheDB daemon detected on 127.0.0.1:6379. Running full coverage report..."; \
+		$(PYTEST) --cov=src/kachedb --cov-report=term-missing tests/; \
+	else \
+		echo "ℹ️  No live KacheDB daemon on 127.0.0.1:6379. Running coverage report on unit tests..."; \
+		$(PYTEST) --cov=src/kachedb --cov-report=term-missing tests/ -m "not integration"; \
+	fi
 
 lint: venv-check
 	$(RUFF) check src/ tests/
