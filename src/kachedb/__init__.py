@@ -25,7 +25,7 @@ Async::
 
 from ._version import __version__
 from .async_client import AsyncKacheClient
-from .client import KacheClient
+from .client import KacheClient, VectorMatch
 from .connection import Connection
 from .descriptor import (
     TENSOR_DESCRIPTOR_MAGIC,
@@ -45,8 +45,15 @@ from .exceptions import (
 from .pipeline import AsyncPipeline, Pipeline
 from .pool import AsyncConnectionPool, ConnectionPool
 from .quantizer import sq8_decode, sq8_encode
-from .semantic import AsyncSemanticCache, SearchResult, SemanticCache
+from .semantic import (
+    AsyncSemanticCache,
+    DocumentChunk,
+    MarkdownChunker,
+    SearchResult,
+    SemanticCache,
+)
 from .sglang import KacheDBRadixAdapter, KacheDBSGLangConnector
+from .tags import tag_to_bit, tags_to_bitmask
 from .tensor import attach_shm, detach_all, read_tensor, read_torch_tensor
 from .vllm import KacheDBConnector, KacheDBPrefixCache
 
@@ -59,6 +66,7 @@ __all__ = [
     "Connection",
     "ConnectionError",
     "ConnectionPool",
+    "DocumentChunk",
     "KacheClient",
     "KacheDBConnector",
     "KacheDBError",
@@ -66,6 +74,7 @@ __all__ = [
     "KacheDBPrefixCache",
     "KacheDBRadixAdapter",
     "KacheDBSGLangConnector",
+    "MarkdownChunker",
     "Pipeline",
     "PoolExhaustedError",
     "ProtocolError",
@@ -76,6 +85,7 @@ __all__ = [
     "TensorCodec",
     "TensorDType",
     "TimeoutError",
+    "VectorMatch",
     "__version__",
     "attach_shm",
     "detach_all",
@@ -83,4 +93,6 @@ __all__ = [
     "read_torch_tensor",
     "sq8_decode",
     "sq8_encode",
+    "tag_to_bit",
+    "tags_to_bitmask",
 ]

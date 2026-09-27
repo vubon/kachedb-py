@@ -164,7 +164,7 @@ class TestKacheClientVectorCommands:
 
 class TestEmbedderAdapters:
     def test_transformers_embedder_mocked(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        import torch
+        torch = pytest.importorskip("torch")
 
         fake_tok = MagicMock()
         mock_inputs = {
@@ -194,7 +194,7 @@ class TestEmbedderAdapters:
         assert abs(norm - 1.0) < 1e-4
 
     def test_transformers_embedder_device_detection(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        import torch
+        torch = pytest.importorskip("torch")
 
         fake_tok = MagicMock()
         fake_model = MagicMock()

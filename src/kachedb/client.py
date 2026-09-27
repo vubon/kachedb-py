@@ -20,10 +20,57 @@ from typing import TYPE_CHECKING, Any
 
 from .pipeline import Pipeline
 from .pool import ConnectionPool
+from .tags import tags_to_bitmask
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from .connection import Connection
     from .resp import RespValue
+
+
+class VectorMatch(tuple[Any, ...]):
+    """Semantic vector search match result.
+
+    100% backward-compatible with 3-tuple (id, score, payload).
+    """
+
+    id: str | bytes
+    score: float
+    payload: str | bytes | None
+    parent_key: str | bytes | None
+
+    def __new__(
+        cls,
+        item_id: Any,
+        score: float = 0.0,
+        payload: str | bytes | None = None,
+        parent_key: str | bytes | None = None,
+    ) -> VectorMatch:
+        if isinstance(item_id, (tuple, list)):
+            tup = item_id
+            i_id = tup[0] if len(tup) > 0 else ""
+            sc = float(tup[1]) if len(tup) > 1 else 0.0
+            pl = tup[2] if len(tup) > 2 else None
+            pk = tup[3] if len(tup) > 3 else None
+            return cls(i_id, sc, pl, pk)
+        instance = super().__new__(cls, (item_id, score, payload))
+        instance.id = item_id
+        instance.score = score
+        instance.payload = payload
+        instance.parent_key = parent_key
+        return instance
+
+    def __getitem__(self, index: Any) -> Any:
+        if isinstance(index, int) and index == 3:
+            return self.parent_key
+        return super().__getitem__(index)
+
+    def __repr__(self) -> str:
+        return (
+            f"VectorMatch(id={self.id!r}, score={self.score!r}, "
+            f"payload={self.payload!r}, parent_key={self.parent_key!r})"
+        )
 
 
 class KacheClient:
@@ -351,6 +398,9 @@ class KacheClient:
         *,
         payload: str | bytes | None = None,
         ex: int | None = None,
+        tag_mask: int = 0,
+        tags: Iterable[str] | None = None,
+        parent_key: str | bytes | None = None,
     ) -> bool:
         """Store a vector embedding in a named vector index.
 
@@ -366,6 +416,12 @@ class KacheClient:
             Optional associated text or metadata.
         ex : int | None
             TTL expiration in seconds.
+        tag_mask : int
+            64-bit integer bitmask for pre-filtering. Default: 0 (untagged).
+        tags : Iterable[str] | None
+            Optional collection of tag strings to deterministically hash into the bitmask.
+        parent_key : str | bytes | None
+            Optional key pointing to a full parent document stored in the KV store.
         """
         import struct
 
@@ -378,11 +434,17 @@ class KacheClient:
         else:
             raise TypeError(f"Unsupported vector type: {type(vector)}")
 
+        computed_tag_mask = tags_to_bitmask(tags, base_mask=tag_mask)
+
         args: list[str | bytes] = ["VADD", index, item_id, str(dim), vector_bytes]
         if payload is not None:
             args.extend(["PAYLOAD", payload])
         if ex is not None:
             args.extend(["EX", str(ex)])
+        if computed_tag_mask > 0:
+            args.extend(["TAGS", str(computed_tag_mask)])
+        if parent_key is not None:
+            args.extend(["PARENT", parent_key])
 
         result = self._execute(*args)
         return result == 1 or result == "OK"
@@ -394,10 +456,12 @@ class KacheClient:
         *,
         top_k: int = 1,
         threshold: float = 0.0,
-    ) -> list[tuple[str | bytes, float, str | bytes | None]]:
+        filter_mask: int = 0,
+        filter_tags: Iterable[str] | None = None,
+    ) -> list[VectorMatch]:
         """Search for nearest semantic vectors in a named index.
 
-        Returns a list of tuples: (item_id, similarity_score, payload).
+        Returns a list of VectorMatch objects (tuple-compatible with (id, score, payload)).
         """
         import struct
 
@@ -408,6 +472,8 @@ class KacheClient:
         else:
             raise TypeError(f"Unsupported vector type: {type(query_vector)}")
 
+        computed_filter_mask = tags_to_bitmask(filter_tags, base_mask=filter_mask)
+
         args: list[str | bytes] = [
             "VSEARCH",
             index,
@@ -417,11 +483,14 @@ class KacheClient:
             "THRESHOLD",
             str(threshold),
         ]
+        if computed_filter_mask > 0:
+            args.extend(["FILTER", str(computed_filter_mask)])
+
         raw_results = self._execute(*args)
         if not isinstance(raw_results, list):
             return []
 
-        results: list[tuple[str | bytes, float, str | bytes | None]] = []
+        results: list[VectorMatch] = []
         for item in raw_results:
             if isinstance(item, list) and len(item) >= 2:
                 raw_id = item[0]
@@ -442,7 +511,13 @@ class KacheClient:
                     if isinstance(raw_payload, (str, bytes)) or raw_payload is None
                     else str(raw_payload)
                 )
-                results.append((item_id, score, payload))
+                raw_parent = item[3] if len(item) > 3 else None
+                parent_key: str | bytes | None = (
+                    raw_parent
+                    if isinstance(raw_parent, (str, bytes)) or raw_parent is None
+                    else str(raw_parent)
+                )
+                results.append(VectorMatch(item_id, score, payload, parent_key=parent_key))
         return results
 
     def vdel(self, index: str | bytes, item_id: str | bytes) -> bool:

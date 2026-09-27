@@ -23,13 +23,16 @@ from __future__ import annotations
 import contextlib
 from typing import TYPE_CHECKING, Any
 
+from .client import VectorMatch
 from .exceptions import ConnectionError
 from .pipeline import AsyncPipeline
 from .pool import AsyncConnectionPool
 from .resp import AsyncRespReader, RespValue, encode_command
+from .tags import tags_to_bitmask
 
 if TYPE_CHECKING:
     import asyncio
+    from collections.abc import Iterable
 
 
 class AsyncKacheClient:
@@ -304,8 +307,31 @@ class AsyncKacheClient:
         *,
         payload: str | bytes | None = None,
         ex: int | None = None,
+        tag_mask: int = 0,
+        tags: Iterable[str] | None = None,
+        parent_key: str | bytes | None = None,
     ) -> bool:
-        """Store a vector embedding in a named vector index asynchronously."""
+        """Store a vector embedding in a named vector index asynchronously.
+
+        Parameters
+        ----------
+        index : str | bytes
+            Target vector index name.
+        item_id : str | bytes
+            Unique identifier for the vector record.
+        vector : bytes | list[float] | tuple[float, ...]
+            Raw float32 little-endian bytes or sequence of floats.
+        payload : str | bytes | None
+            Optional associated text or metadata.
+        ex : int | None
+            TTL expiration in seconds.
+        tag_mask : int
+            64-bit integer bitmask for pre-filtering. Default: 0 (untagged).
+        tags : Iterable[str] | None
+            Optional collection of tag strings to deterministically hash into the bitmask.
+        parent_key : str | bytes | None
+            Optional key pointing to a full parent document stored in the KV store.
+        """
         import struct
 
         if isinstance(vector, (list, tuple)):
@@ -317,11 +343,17 @@ class AsyncKacheClient:
         else:
             raise TypeError(f"Unsupported vector type: {type(vector)}")
 
+        computed_tag_mask = tags_to_bitmask(tags, base_mask=tag_mask)
+
         args: list[str | bytes] = ["VADD", index, item_id, str(dim), vector_bytes]
         if payload is not None:
             args.extend(["PAYLOAD", payload])
         if ex is not None:
             args.extend(["EX", str(ex)])
+        if computed_tag_mask > 0:
+            args.extend(["TAGS", str(computed_tag_mask)])
+        if parent_key is not None:
+            args.extend(["PARENT", parent_key])
 
         result = await self._execute(*args)
         return result == 1 or result == "OK"
@@ -333,8 +365,13 @@ class AsyncKacheClient:
         *,
         top_k: int = 1,
         threshold: float = 0.0,
-    ) -> list[tuple[str | bytes, float, str | bytes | None]]:
-        """Search for nearest semantic vectors in a named index asynchronously."""
+        filter_mask: int = 0,
+        filter_tags: Iterable[str] | None = None,
+    ) -> list[VectorMatch]:
+        """Search for nearest semantic vectors in a named index asynchronously.
+
+        Returns a list of VectorMatch objects (tuple-compatible with (id, score, payload)).
+        """
         import struct
 
         if isinstance(query_vector, (list, tuple)):
@@ -343,6 +380,8 @@ class AsyncKacheClient:
             query_bytes = bytes(query_vector)
         else:
             raise TypeError(f"Unsupported vector type: {type(query_vector)}")
+
+        computed_filter_mask = tags_to_bitmask(filter_tags, base_mask=filter_mask)
 
         args: list[str | bytes] = [
             "VSEARCH",
@@ -353,11 +392,14 @@ class AsyncKacheClient:
             "THRESHOLD",
             str(threshold),
         ]
+        if computed_filter_mask > 0:
+            args.extend(["FILTER", str(computed_filter_mask)])
+
         raw_results = await self._execute(*args)
         if not isinstance(raw_results, list):
             return []
 
-        results: list[tuple[str | bytes, float, str | bytes | None]] = []
+        results: list[VectorMatch] = []
         for item in raw_results:
             if isinstance(item, list) and len(item) >= 2:
                 raw_id = item[0]
@@ -378,7 +420,13 @@ class AsyncKacheClient:
                     if isinstance(raw_payload, (str, bytes)) or raw_payload is None
                     else str(raw_payload)
                 )
-                results.append((item_id, score, payload))
+                raw_parent = item[3] if len(item) > 3 else None
+                parent_key: str | bytes | None = (
+                    raw_parent
+                    if isinstance(raw_parent, (str, bytes)) or raw_parent is None
+                    else str(raw_parent)
+                )
+                results.append(VectorMatch(item_id, score, payload, parent_key=parent_key))
         return results
 
     async def vdel(self, index: str | bytes, item_id: str | bytes) -> bool:

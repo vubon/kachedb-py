@@ -5,6 +5,7 @@ Provides SIMD-accelerated embedding similarity search and semantic LLM response 
 """
 
 from .cache import AsyncSemanticCache, SearchResult, SemanticCache
+from .chunker import DocumentChunk, MarkdownChunker
 from .embedders import (
     CallableAdapter,
     EmbeddingAdapter,
@@ -17,8 +18,10 @@ from .embedders import (
 __all__ = [
     "AsyncSemanticCache",
     "CallableAdapter",
+    "DocumentChunk",
     "EmbeddingAdapter",
     "FastEmbedAdapter",
+    "MarkdownChunker",
     "MockEmbedder",
     "OpenAIAdapter",
     "SearchResult",

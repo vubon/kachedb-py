@@ -4,6 +4,8 @@ Tests for VADD_BATCH and VSEARCH_BATCH in KacheClient and AsyncKacheClient.
 
 from __future__ import annotations
 
+import os
+
 import pytest
 
 from kachedb import AsyncKacheClient, KacheClient
@@ -13,6 +15,8 @@ from tests.conftest import (
     resp_bulk_string,
     resp_integer,
 )
+
+TEST_PORT = int(os.environ.get("KACHEDB_PORT", "6379"))
 
 
 def test_batch_empty_calls() -> None:
@@ -82,8 +86,8 @@ def test_vsearch_batch_wire(mock_server: MockKacheDBServer) -> None:
 
 @pytest.mark.integration
 def test_sync_batch_vector_crud_live() -> None:
-    """Live integration test requiring a running KacheDB server on 127.0.0.1:6379."""
-    with KacheClient() as client:
+    """Live integration test requiring a running KacheDB server."""
+    with KacheClient(port=TEST_PORT) as client:
         index = "test:sync:batch"
         v1 = [1.0, 0.0, 0.0, 0.0]
         v2 = [0.0, 1.0, 0.0, 0.0]
@@ -105,8 +109,8 @@ def test_sync_batch_vector_crud_live() -> None:
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_async_batch_vector_crud_live() -> None:
-    """Live async integration test requiring a running KacheDB server on 127.0.0.1:6379."""
-    async with AsyncKacheClient() as async_client:
+    """Live async integration test requiring a running KacheDB server."""
+    async with AsyncKacheClient(port=TEST_PORT) as async_client:
         index = "test:async:batch"
         v1 = [1.0, 0.0, 0.0, 0.0]
         items = [("a1", v1, "Async Payload 1")]

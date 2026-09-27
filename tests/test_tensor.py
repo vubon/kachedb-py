@@ -116,7 +116,7 @@ class TestTensorBlockDescriptor:
 
 class TestTensorCodec:
     def test_codec_bfloat16_and_unknown_dtype(self) -> None:
-        import torch
+        torch = pytest.importorskip("torch")
 
         from kachedb.descriptor import TensorCodec, TensorDType
 
@@ -320,10 +320,13 @@ class TestTensorOperations:
         with pytest.raises(ValueError, match="Invalid tensor descriptor magic"):
             read_tensor(core_id=7, byte_offset=512, size_bytes=size)
 
-        # Test torch tensor read
-        torch_tensor = read_torch_tensor(core_id=7, byte_offset=0, size_bytes=size)
-        assert torch_tensor.shape[0] == 16
-        assert float(torch_tensor[1]) == 1.5
+        # Test torch tensor read (when torch is installed)
+        try:
+            torch_tensor = read_torch_tensor(core_id=7, byte_offset=0, size_bytes=size)
+            assert torch_tensor.shape[0] == 16
+            assert float(torch_tensor[1]) == 1.5
+        except ImportError:
+            pass
 
         detach_all()
 
