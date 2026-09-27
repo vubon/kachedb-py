@@ -5,6 +5,24 @@ All notable changes to the `kachedb` Python SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] — 2026-09-27
+
+### Added
+- **64-bit Bitmask Tag Pre-Filtering (`kachedb.tags`):**
+  - Added `tags` module mapping string taxonomy tags to 64-bit integer bitmasks.
+  - Added `tag_mask` and `tags` parameters to `vadd`, `vsearch`, `vadd_batch`, and `vsearch_batch` across `KacheClient` and `AsyncKacheClient`.
+  - Enables sub-microsecond bitwise pre-filtering skipping non-matching vector candidates before computing SIMD dot products.
+- **Hierarchical Document Chunking (`kachedb.chunker`):**
+  - Added `chunk_document()` for splitting large context documents into hierarchical chunks with breadcrumb headers.
+- **Parent Document Linkage (`parent_key`):**
+  - Added `parent_key` parameter to vector operations allowing chunk vectors to link directly to their unabridged parent document in SwissTable.
+- **Semantic Caching Enhancements (`kachedb.semantic`):**
+  - Upgraded semantic caching pipeline to accept tag filters and automatically resolve parent documents upon nearest-neighbor cache hits.
+- **Server Parity:**
+  - Full compatibility with KacheDB Core `v0.2.0` Snapshot Encryption-at-Rest (`KDB\x03`) and Hybrid Context Engine.
+
+---
+
 ## [0.1.1] — 2026-09-09
 
 ### Fixed
