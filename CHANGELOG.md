@@ -5,6 +5,20 @@ All notable changes to the `kachedb` Python SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] — 2026-10-05
+
+### Added
+- **Redis Hash Primitives (`hset`, `hget`, `hdel`, `hexists`, `hlen`, `hgetall`):**
+  - Added synchronous and asynchronous Hash commands across `KacheClient` and `AsyncKacheClient`.
+  - Added pipeline batching support for all Hash commands in `Pipeline` and `AsyncPipeline`.
+  - Native support for both single pair assignments (`hset(key, field, value)`) and multi-field dictionary mappings (`hset(key, mapping={...})`).
+  - Automatic key/value decoding in `hgetall()` when `decode_responses=True`.
+  - Full server parity with KacheDB Server `v0.3.0` / `v0.3.1` sub-25ns in-slot Megaslab Hash architecture.
+- **Connection Resilience:**
+  - Preserved socket connection lifecycle upon clean application-level `ResponseError` (e.g. `WRONGTYPE`).
+
+---
+
 ## [0.2.0] — 2026-09-27
 
 ### Added

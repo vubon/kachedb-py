@@ -32,7 +32,7 @@ from .tags import tags_to_bitmask
 
 if TYPE_CHECKING:
     import asyncio
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Mapping
 
 
 class AsyncKacheClient:
@@ -288,6 +288,96 @@ class AsyncKacheClient:
         """Delete all keys in all databases."""
         result = await self._execute("FLUSHALL")
         return result in ("OK", b"OK", True)
+
+    # ── Redis Hash Commands ───────────────────────────────────────────────
+
+    async def hset(
+        self,
+        key: str | bytes,
+        field: str | bytes | None = None,
+        value: str | bytes | None = None,
+        *,
+        mapping: Mapping[str | bytes, str | bytes] | None = None,
+    ) -> int:
+        """Set field(s) in a hash stored at *key*.
+
+        Supports single field-value pairs or a bulk dictionary mapping.
+
+        Parameters
+        ----------
+        key : str | bytes
+            The hash key.
+        field : str | bytes | None
+            Field name (when setting a single field).
+        value : str | bytes | None
+            Field value (when setting a single field).
+        mapping : Mapping[str | bytes, str | bytes] | None
+            A mapping of field -> value to set multiple fields.
+
+        Returns
+        -------
+        int
+            Number of newly added fields (excluding existing fields whose values were updated).
+        """
+        args: list[str | bytes] = ["HSET", key]
+        if mapping is not None:
+            for f, v in mapping.items():
+                args.extend([f, v])
+        elif field is not None and value is not None:
+            args.extend([field, value])
+        else:
+            raise ValueError("hset() requires either field and value, or mapping")
+        result = await self._execute(*args)
+        return int(result) if isinstance(result, int) else 0
+
+    async def hget(self, key: str | bytes, field: str | bytes) -> bytes | str | None:
+        """Get the value of a hash *field* stored at *key*.
+
+        Returns ``None`` if the key or field does not exist.
+        """
+        return await self._execute("HGET", key, field)  # type: ignore[return-value]
+
+    async def hdel(self, key: str | bytes, *fields: str | bytes) -> int:
+        """Delete one or more *fields* from the hash stored at *key*.
+
+        Returns the number of fields that were removed.
+        """
+        if not fields:
+            raise ValueError("hdel() requires at least one field")
+        result = await self._execute("HDEL", key, *fields)
+        return int(result) if isinstance(result, int) else 0
+
+    async def hexists(self, key: str | bytes, field: str | bytes) -> bool:
+        """Determine if a hash *field* exists at *key*."""
+        result = await self._execute("HEXISTS", key, field)
+        return result == 1
+
+    async def hlen(self, key: str | bytes) -> int:
+        """Return the number of fields contained in the hash stored at *key*."""
+        result = await self._execute("HLEN", key)
+        return int(result) if isinstance(result, int) else 0
+
+    async def hgetall(self, key: str | bytes) -> dict[bytes | str, bytes | str]:
+        """Get all fields and values of the hash stored at *key*.
+
+        Returns a dictionary of field -> value mappings.
+        """
+        raw = await self._execute("HGETALL", key)
+        if not isinstance(raw, list):
+            return {}
+        decode = getattr(self, "decode_responses", False)
+        result: dict[bytes | str, bytes | str] = {}
+        for i in range(0, len(raw) - 1, 2):
+            f = raw[i]
+            v = raw[i + 1]
+            if decode:
+                if isinstance(f, bytes):
+                    f = f.decode("utf-8", errors="replace")
+                if isinstance(v, bytes):
+                    v = v.decode("utf-8", errors="replace")
+            if isinstance(f, (str, bytes)) and isinstance(v, (str, bytes)):
+                result[f] = v
+        return result
 
     # ── Pipeline ──────────────────────────────────────────────────────────
 

@@ -14,6 +14,7 @@ from .resp import RespValue, encode_commands
 
 if TYPE_CHECKING:
     import asyncio
+    from collections.abc import Mapping
 
     from .connection import Connection
     from .resp import AsyncRespReader
@@ -163,6 +164,49 @@ class Pipeline:
     def flushall(self) -> Pipeline:
         """Queue a FLUSHALL command."""
         return self._queue("FLUSHALL")
+
+    # ── Redis Hash Commands ───────────────────────────────────────────────
+
+    def hset(
+        self,
+        key: str | bytes,
+        field: str | bytes | None = None,
+        value: str | bytes | None = None,
+        *,
+        mapping: Mapping[str | bytes, str | bytes] | None = None,
+    ) -> Pipeline:
+        """Queue an HSET command."""
+        args: list[str | bytes] = ["HSET", key]
+        if mapping is not None:
+            for f, v in mapping.items():
+                args.extend([f, v])
+        elif field is not None and value is not None:
+            args.extend([field, value])
+        else:
+            raise ValueError("hset() requires either field and value, or mapping")
+        return self._queue(*args)
+
+    def hget(self, key: str | bytes, field: str | bytes) -> Pipeline:
+        """Queue an HGET command."""
+        return self._queue("HGET", key, field)
+
+    def hdel(self, key: str | bytes, *fields: str | bytes) -> Pipeline:
+        """Queue an HDEL command."""
+        if not fields:
+            raise ValueError("hdel() requires at least one field")
+        return self._queue("HDEL", key, *fields)
+
+    def hexists(self, key: str | bytes, field: str | bytes) -> Pipeline:
+        """Queue an HEXISTS command."""
+        return self._queue("HEXISTS", key, field)
+
+    def hlen(self, key: str | bytes) -> Pipeline:
+        """Queue an HLEN command."""
+        return self._queue("HLEN", key)
+
+    def hgetall(self, key: str | bytes) -> Pipeline:
+        """Queue an HGETALL command."""
+        return self._queue("HGETALL", key)
 
     # ── Execution ─────────────────────────────────────────────────────────
 
@@ -343,6 +387,49 @@ class AsyncPipeline:
     def flushall(self) -> AsyncPipeline:
         """Queue a FLUSHALL command."""
         return self._queue("FLUSHALL")
+
+    # ── Redis Hash Commands ───────────────────────────────────────────────
+
+    def hset(
+        self,
+        key: str | bytes,
+        field: str | bytes | None = None,
+        value: str | bytes | None = None,
+        *,
+        mapping: Mapping[str | bytes, str | bytes] | None = None,
+    ) -> AsyncPipeline:
+        """Queue an HSET command."""
+        args: list[str | bytes] = ["HSET", key]
+        if mapping is not None:
+            for f, v in mapping.items():
+                args.extend([f, v])
+        elif field is not None and value is not None:
+            args.extend([field, value])
+        else:
+            raise ValueError("hset() requires either field and value, or mapping")
+        return self._queue(*args)
+
+    def hget(self, key: str | bytes, field: str | bytes) -> AsyncPipeline:
+        """Queue an HGET command."""
+        return self._queue("HGET", key, field)
+
+    def hdel(self, key: str | bytes, *fields: str | bytes) -> AsyncPipeline:
+        """Queue an HDEL command."""
+        if not fields:
+            raise ValueError("hdel() requires at least one field")
+        return self._queue("HDEL", key, *fields)
+
+    def hexists(self, key: str | bytes, field: str | bytes) -> AsyncPipeline:
+        """Queue an HEXISTS command."""
+        return self._queue("HEXISTS", key, field)
+
+    def hlen(self, key: str | bytes) -> AsyncPipeline:
+        """Queue an HLEN command."""
+        return self._queue("HLEN", key)
+
+    def hgetall(self, key: str | bytes) -> AsyncPipeline:
+        """Queue an HGETALL command."""
+        return self._queue("HGETALL", key)
 
     async def execute(self) -> list[RespValue]:
         """Send all queued commands and collect responses."""

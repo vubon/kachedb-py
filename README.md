@@ -49,14 +49,17 @@ with KacheClient(host="127.0.0.1", port=6379) as client:
     client.set("user:1", "alice", ex=3600)  # SET with 1-hour TTL
     print(client.get("user:1"))  # b"alice"
 
+    # Redis Hashes (sub-25ns in-slot Megaslab storage)
+    client.hset("user:profile", mapping={"name": "Alice", "role": "admin"})
+    print(client.hget("user:profile", "name"))  # b"Alice"
+    print(client.hgetall("user:profile"))  # {b"name": b"Alice", b"role": b"admin"}
+
     # Batch operations
     client.set("user:2", "bob")
     result = client.mget("user:1", "user:2")  # [b"alice", b"bob"]
 
-    # Check existence
+    # Check existence & delete
     print(client.exists("user:1"))  # 1
-
-    # Delete
     client.delete("user:1", "user:2")
 ```
 
