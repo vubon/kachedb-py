@@ -4,19 +4,40 @@ from __future__ import annotations
 
 import math
 import sys
+from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
 
+import numpy as np
 import pytest
 
-from kachedb import AsyncSemanticCache, KacheClient, SearchResult, SemanticCache
+from kachedb import (
+    AsyncSemanticCache,
+    EmbeddingGemmaAdapter,
+    EmbeddingTask,
+    KacheClient,
+    SearchResult,
+    SemanticCache,
+)
 from kachedb.semantic.embedders import (
+    DEFAULT_MAX_TOKENS,
+    PREFIX_DOCUMENT_INDEXING,
+    PREFIX_SEARCH_QUERY,
     CallableAdapter,
     FastEmbedAdapter,
     MockEmbedder,
+    ModelResolutionConfig,
+    ModelSourceMode,
     OpenAIAdapter,
     SentenceTransformersAdapter,
     TransformersEmbedder,
+    format_task_prompt,
+    l2_normalize,
+    resolve_model_paths,
+    slice_and_normalize,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 from tests.conftest import (
     MockKacheDBServer,
     resp_array,
@@ -321,7 +342,11 @@ class TestAsyncSemanticCache:
         st = await cache.stats()
         assert st["total_vectors"] == 5
 
-    def test_cache_auto_select_fallback(self) -> None:
+    def test_cache_auto_select_fallback(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setitem(sys.modules, "fastembed", None)
+        monkeypatch.setitem(sys.modules, "sentence_transformers", None)
+        monkeypatch.delenv("EMBEDDING_MODEL_PATH", raising=False)
+        monkeypatch.delenv("KACHEDB_EMBEDDER", raising=False)
         mock_client = MagicMock()
         # FastEmbed and SentenceTransformers missing -> falls back to MockEmbedder
         cache = SemanticCache(client=mock_client, index_name="test_auto")
@@ -333,7 +358,11 @@ class TestAsyncSemanticCache:
         )
         assert isinstance(sync_callable_cache.embedder, CallableAdapter)
 
-    def test_async_cache_init_branches(self) -> None:
+    def test_async_cache_init_branches(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setitem(sys.modules, "fastembed", None)
+        monkeypatch.setitem(sys.modules, "sentence_transformers", None)
+        monkeypatch.delenv("EMBEDDING_MODEL_PATH", raising=False)
+        monkeypatch.delenv("KACHEDB_EMBEDDER", raising=False)
         mock_client = AsyncMock()
         # None embedder -> auto-selects MockEmbedder
         async_cache_default = AsyncSemanticCache(client=mock_client, index_name="test_default")
@@ -345,3 +374,270 @@ class TestAsyncSemanticCache:
             client=mock_client, index_name="test_explicit", embedder=mock_embedder
         )
         assert async_cache_explicit.embedder is mock_embedder
+
+
+class TestEmbeddingGemmaUnit1:
+    """Comprehensive unit tests for EmbeddingGemma 2 MRL, task prefixes, resolver, and adapter."""
+
+    def test_task_prompt_formatting_and_idempotence(self) -> None:
+        q = format_task_prompt(EmbeddingTask.SEARCH_QUERY, "What is an LLM?")
+        assert q == f"{PREFIX_SEARCH_QUERY}What is an LLM?"
+        # Idempotent if called again
+        assert format_task_prompt(EmbeddingTask.SEARCH_QUERY, q) == q
+        assert format_task_prompt(EmbeddingTask.DOCUMENT_INDEXING, q) == q
+
+        d = format_task_prompt(EmbeddingTask.DOCUMENT_INDEXING, "LLMs are neural networks.")
+        assert d == f"{PREFIX_DOCUMENT_INDEXING}LLMs are neural networks."
+        assert format_task_prompt(EmbeddingTask.DOCUMENT_INDEXING, d) == d
+
+    def test_mrl_slice_and_normalize_384_and_768(self) -> None:
+        raw_768 = [float(i + 1) for i in range(768)]
+
+        sliced_384 = slice_and_normalize(raw_768, 384)
+        assert len(sliced_384) == 384
+        norm_384 = math.sqrt(sum(x * x for x in sliced_384))
+        assert abs(norm_384 - 1.0) < 1e-6
+
+        full_768 = slice_and_normalize(raw_768, 768)
+        assert len(full_768) == 768
+        norm_768 = math.sqrt(sum(x * x for x in full_768))
+        assert abs(norm_768 - 1.0) < 1e-6
+
+    def test_mrl_slice_and_normalize_rejects_invalid_inputs(self) -> None:
+        raw_768 = [1.0] * 768
+        for invalid_dim in (0, 64, 128, 256, 512, 1024):
+            with pytest.raises(ValueError, match="Unsupported MRL target dimension"):
+                slice_and_normalize(raw_768, invalid_dim)
+
+        with pytest.raises(ValueError, match="smaller than target dimension"):
+            slice_and_normalize([1.0] * 128, 384)
+
+        with pytest.raises(ValueError, match="Cannot normalize an empty vector"):
+            l2_normalize([])
+
+        with pytest.raises(ValueError, match="zero or sub-epsilon"):
+            slice_and_normalize([0.0] * 768, 384)
+
+        with pytest.raises(ValueError, match="NaN or infinite"):
+            l2_normalize([float("nan")] * 384)
+
+    def test_model_path_resolver_precedence(self, tmp_path: Path) -> None:
+        def _populate_dir(d: Path) -> Path:
+            d.mkdir(parents=True, exist_ok=True)
+            (d / "model.onnx").write_bytes(b"fake-onnx")
+            (d / "tokenizer.json").write_text("{}", encoding="utf-8")
+            return d
+
+        cli_dir = _populate_dir(tmp_path / "cli_models")
+        env_dir = _populate_dir(tmp_path / "env_models")
+        cache_dir = _populate_dir(tmp_path / "cache_models")
+
+        # 1. Explicit cli_path wins over env_path and cache_dir
+        cfg1 = ModelResolutionConfig(cli_path=cli_dir, env_path=env_dir, cache_dir=cache_dir)
+        res1 = resolve_model_paths(cfg1)
+        assert res1.source is ModelSourceMode.EXPLICIT_PATH
+        assert res1.root_dir == cli_dir
+
+        # 2. env_path wins over cache_dir when cli_path is None
+        cfg2 = ModelResolutionConfig(cli_path=None, env_path=env_dir, cache_dir=cache_dir)
+        res2 = resolve_model_paths(cfg2)
+        assert res2.source is ModelSourceMode.ENV_VAR
+        assert res2.root_dir == env_dir
+
+        # 3. cache_dir fallback when cli_path and env_path are None
+        cfg3 = ModelResolutionConfig(cli_path=None, env_path=None, cache_dir=cache_dir)
+        res3 = resolve_model_paths(cfg3)
+        assert res3.source is ModelSourceMode.HUGGINGFACE_CACHE
+        assert res3.root_dir == cache_dir
+
+    def test_model_path_resolver_errors(self, tmp_path: Path) -> None:
+        missing_dir = tmp_path / "does_not_exist"
+        with pytest.raises(FileNotFoundError, match="does not exist"):
+            resolve_model_paths(ModelResolutionConfig(cli_path=missing_dir))
+
+        no_onnx_dir = tmp_path / "no_onnx"
+        no_onnx_dir.mkdir()
+        (no_onnx_dir / "tokenizer.json").write_text("{}", encoding="utf-8")
+        with pytest.raises(FileNotFoundError, match=r"model\.onnx"):
+            resolve_model_paths(ModelResolutionConfig(cli_path=no_onnx_dir))
+
+        no_tok_dir = tmp_path / "no_tok"
+        no_tok_dir.mkdir()
+        (no_tok_dir / "model.onnx").write_bytes(b"onnx")
+        with pytest.raises(FileNotFoundError, match=r"tokenizer\.json"):
+            resolve_model_paths(ModelResolutionConfig(cli_path=no_tok_dir))
+
+    def test_embedding_gemma_adapter_synthetic_onnx_3d_and_2d(self) -> None:
+        recorded_prompts: list[str] = []
+
+        def _make_mock_tokenizer(token_len: int | None = None) -> MagicMock:
+            tok = MagicMock()
+
+            def _encode(text: str, add_special_tokens: bool = True) -> MagicMock:
+                assert add_special_tokens is True
+                recorded_prompts.append(text)
+                n = token_len if token_len is not None else max(1, len(text.split()))
+                enc = MagicMock()
+                enc.ids = [101] * n
+                enc.attention_mask = [1] * n
+                return enc
+
+            tok.encode.side_effect = _encode
+            return tok
+
+        def _make_mock_session(rank: int = 3) -> MagicMock:
+            sess = MagicMock()
+            inp1 = MagicMock()
+            inp1.name = "input_ids"
+            inp2 = MagicMock()
+            inp2.name = "attention_mask"
+            sess.get_inputs.return_value = [inp1, inp2]
+
+            def _run(_out_names: object, feeds: dict[str, np.ndarray]) -> list[np.ndarray]:
+                seq_len = feeds["input_ids"].shape[1]
+                if rank == 3:
+                    # [1, seq_len, 768]
+                    arr = np.ones((1, seq_len, 768), dtype=np.float32)
+                    arr[0, :, 0] = 5.0
+                    return [arr]
+                # rank == 2 -> [1, 768]
+                arr2 = np.ones((1, 768), dtype=np.float32)
+                arr2[0, 0] = 3.0
+                return [arr2]
+
+            sess.run.side_effect = _run
+            return sess
+
+        # 1. Test 384-d MRL slicing with 3D mean pooling and asymmetric task prefixes
+        adapter_384 = EmbeddingGemmaAdapter(
+            dimension=384,
+            _session=_make_mock_session(rank=3),
+            _tokenizer=_make_mock_tokenizer(),
+        )
+        q_vec = adapter_384.encode_query("What is KacheDB?")
+        assert len(q_vec) == 384
+        assert abs(math.sqrt(sum(x * x for x in q_vec)) - 1.0) < 1e-6
+        assert recorded_prompts[-1] == "task: search query | text: What is KacheDB?"
+
+        d_vec = adapter_384.encode_document("KacheDB is a sub-millisecond vector database.")
+        assert len(d_vec) == 384
+        assert abs(math.sqrt(sum(x * x for x in d_vec)) - 1.0) < 1e-6
+        assert (
+            recorded_prompts[-1]
+            == "task: document indexing | text: KacheDB is a sub-millisecond vector database."
+        )
+
+        # 2. Test 768-d full output with 2D pooled ONNX output
+        adapter_768 = EmbeddingGemmaAdapter(
+            dimension=768,
+            _session=_make_mock_session(rank=2),
+            _tokenizer=_make_mock_tokenizer(),
+        )
+        vec_768 = adapter_768.encode("Hello EmbeddingGemma 2")
+        assert len(vec_768) == 768
+        assert abs(math.sqrt(sum(x * x for x in vec_768)) - 1.0) < 1e-6
+
+        # 3. Test 8,192-token context window boundary (pass at 8192, reject at 8193)
+        adapter_8192 = EmbeddingGemmaAdapter(
+            dimension=384,
+            max_tokens=DEFAULT_MAX_TOKENS,
+            _session=_make_mock_session(rank=2),
+            _tokenizer=_make_mock_tokenizer(token_len=8192),
+        )
+        ok_vec = adapter_8192.encode("valid 8k input")
+        assert len(ok_vec) == 384
+
+        adapter_8193 = EmbeddingGemmaAdapter(
+            dimension=384,
+            max_tokens=DEFAULT_MAX_TOKENS,
+            _session=_make_mock_session(rank=2),
+            _tokenizer=_make_mock_tokenizer(token_len=8193),
+        )
+        with pytest.raises(ValueError, match="exceeds maximum context window of 8192 tokens"):
+            adapter_8193.encode("oversized 8k+1 input")
+
+        with pytest.raises(ValueError, match="Input text cannot be empty"):
+            adapter_384.encode("   ")
+
+    def test_embedding_gemma_adapter_config_validation(self) -> None:
+        with pytest.raises(ValueError, match="Unsupported MRL target dimension"):
+            EmbeddingGemmaAdapter(dimension=256, _session=MagicMock(), _tokenizer=MagicMock())
+        with pytest.raises(ValueError, match="max_tokens must be positive"):
+            EmbeddingGemmaAdapter(max_tokens=0, _session=MagicMock(), _tokenizer=MagicMock())
+        with pytest.raises(ValueError, match="concurrency_limit must be >= 1"):
+            EmbeddingGemmaAdapter(concurrency_limit=0, _session=MagicMock(), _tokenizer=MagicMock())
+
+    def test_embedding_gemma_adapter_loads_from_model_dir(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        model_dir = tmp_path / "gemma2"
+        model_dir.mkdir()
+        (model_dir / "model.onnx").write_bytes(b"fake-onnx")
+        (model_dir / "tokenizer.json").write_text("{}", encoding="utf-8")
+
+        mock_ort = MagicMock()
+        mock_sess = MagicMock()
+        inp = MagicMock()
+        inp.name = "input_ids"
+        mock_sess.get_inputs.return_value = [inp]
+        mock_sess.run.return_value = [np.ones((1, 768), dtype=np.float32)]
+        mock_ort.InferenceSession.return_value = mock_sess
+
+        mock_tok_mod = MagicMock()
+        mock_tok = MagicMock()
+        enc = MagicMock()
+        enc.ids = [1, 2, 3]
+        enc.attention_mask = [1, 1, 1]
+        mock_tok.encode.return_value = enc
+        mock_tok_mod.Tokenizer.from_file.return_value = mock_tok
+
+        monkeypatch.setitem(sys.modules, "onnxruntime", mock_ort)
+        monkeypatch.setitem(sys.modules, "tokenizers", mock_tok_mod)
+
+        adapter = EmbeddingGemmaAdapter(model_path=model_dir, dimension=384)
+        assert adapter.resolved_model is not None
+        assert adapter.resolved_model.source is ModelSourceMode.EXPLICIT_PATH
+        vec = adapter.encode("test local onnx")
+        assert len(vec) == 384
+
+        # Verify SemanticCache._auto_select_embedder picks up EMBEDDING_MODEL_PATH
+        monkeypatch.setenv("EMBEDDING_MODEL_PATH", str(model_dir))
+        mock_client = MagicMock(spec=KacheClient)
+        cache = SemanticCache(client=mock_client, index_name="gemma_auto")
+        assert isinstance(cache.embedder, EmbeddingGemmaAdapter)
+
+    def test_embedding_gemma_hf_fallback_and_truncation(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("EMBEDDING_MODEL_PATH", raising=False)
+
+        # 1. Default allow_hf_fallback=False fails fast when no local ONNX directory exists
+        with pytest.raises(FileNotFoundError, match="EMBEDDING_MODEL_PATH"):
+            EmbeddingGemmaAdapter(allow_hf_fallback=False)
+
+        # 2. Explicit allow_hf_fallback=True falls back to HuggingFace Transformers
+        torch = pytest.importorskip("torch")
+        fake_tok = MagicMock()
+        mock_inputs = {
+            "input_ids": torch.zeros((1, 6), dtype=torch.long),
+            "attention_mask": torch.ones((1, 6), dtype=torch.long),
+        }
+
+        class MockInputs(dict):  # type: ignore[type-arg]
+            def to(self, _dev: str) -> MockInputs:
+                return self
+
+        fake_tok.return_value = MockInputs(mock_inputs)
+        fake_model = MagicMock()
+        fake_model.return_value = [torch.ones((1, 6, 768))]
+        fake_model.to.return_value = fake_model
+
+        mock_transformers = MagicMock()
+        mock_transformers.AutoTokenizer.from_pretrained.return_value = fake_tok
+        mock_transformers.AutoModel.from_pretrained.return_value = fake_model
+        monkeypatch.setitem(sys.modules, "transformers", mock_transformers)
+
+        hf_adapter = EmbeddingGemmaAdapter(dimension=384, device="cpu", allow_hf_fallback=True)
+        vec = hf_adapter.encode_document("test hf fallback", truncate=True)
+        assert len(vec) == 384
+        assert abs(math.sqrt(sum(x * x for x in vec)) - 1.0) < 1e-5

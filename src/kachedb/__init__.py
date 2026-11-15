@@ -48,6 +48,8 @@ from .quantizer import sq8_decode, sq8_encode
 from .semantic import (
     AsyncSemanticCache,
     DocumentChunk,
+    EmbeddingGemmaAdapter,
+    EmbeddingTask,
     MarkdownChunker,
     SearchResult,
     SemanticCache,
@@ -67,6 +69,8 @@ __all__ = [
     "ConnectionError",
     "ConnectionPool",
     "DocumentChunk",
+    "EmbeddingGemmaAdapter",
+    "EmbeddingTask",
     "KacheClient",
     "KacheDBConnector",
     "KacheDBError",

@@ -7,12 +7,16 @@ rather than exact string equality, returning cached LLM completions in < 50 µs.
 
 from __future__ import annotations
 
+import asyncio
+import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from .embedders import (
+    ENV_EMBEDDING_MODEL_PATH,
     CallableAdapter,
     EmbeddingAdapter,
+    EmbeddingGemmaAdapter,
     FastEmbedAdapter,
     MockEmbedder,
     SentenceTransformersAdapter,
@@ -100,9 +104,24 @@ class SemanticCache:
 
     @staticmethod
     def _auto_select_embedder() -> EmbeddingAdapter:
-        """Attempts to instantiate FastEmbed or SentenceTransformers,
-        falling back to MockEmbedder.
+        """Attempts to instantiate EmbeddingGemmaAdapter (when configured via env),
+        FastEmbed, or SentenceTransformers, falling back to MockEmbedder.
         """
+        provider = os.environ.get("KACHEDB_EMBEDDER", "").strip().lower()
+        model_path = (
+            os.environ.get("KACHEDB_MODEL_PATH", "").strip()
+            or os.environ.get(ENV_EMBEDDING_MODEL_PATH, "").strip()
+        )
+        gemma_names = ("embeddinggemma", "embeddinggemma-2", "gemma", "embeddinggemma-300m")
+        raw_dim = os.environ.get("KACHEDB_EMBEDDING_DIM", "").strip()
+        dim = int(raw_dim) if raw_dim in ("384", "768") else 384
+
+        if provider in gemma_names or model_path:
+            try:
+                return EmbeddingGemmaAdapter(model_path=model_path or None, dimension=dim)
+            except (ImportError, Exception):
+                pass
+
         try:
             return FastEmbedAdapter()
         except (ImportError, Exception):
@@ -113,7 +132,7 @@ class SemanticCache:
         except (ImportError, Exception):
             pass
 
-        return MockEmbedder()
+        return MockEmbedder(dimension=dim)
 
     def set(
         self,
@@ -364,7 +383,7 @@ class AsyncSemanticCache:
             doc_key = f"doc:{self.workspace}:{prompt.strip()}"
             await self.client.set(doc_key, response, ex=ex)
 
-        vector = self.embedder.encode(prompt)
+        vector = await asyncio.to_thread(self.embedder.encode, prompt)
         vadd_kwargs: dict[str, Any] = {
             "index": self.index_name,
             "item_id": prompt,
@@ -413,7 +432,7 @@ class AsyncSemanticCache:
 
         # 2. Vector Semantic Retrieval with Bitmask Pre-filtering
         th = threshold if threshold is not None else self.similarity_threshold
-        vector = self.embedder.encode(prompt)
+        vector = await asyncio.to_thread(self.embedder.encode, prompt)
 
         vsearch_kwargs: dict[str, Any] = {
             "index": self.index_name,

@@ -22,6 +22,9 @@ pip install kachedb
 ### Installation Extras:
 
 ```bash
+# Google EmbeddingGemma 2 (ONNX Runtime + Tokenizers, 8K context, 384-d/768-d MRL)
+pip install "kachedb[gemma]"
+
 # PyTorch tensor zero-copy support (FP16, BF16, FP32, INT8)
 pip install "kachedb[torch]"
 
@@ -156,6 +159,33 @@ matched_tokens, is_hit = connector.restore_prefix(
 )
 ```
 👉 *Read the full [SGLang Production Integration Guide](docs/guides/sglang_integration_guide.md).*
+
+---
+
+### 3. 🧠 Semantic Vector Cache with Google EmbeddingGemma 2 (8K Context, 384-d MRL)
+
+Use `EmbeddingGemmaAdapter` with local ONNX Runtime weights (`model.onnx` + `tokenizer.json`) for 8,192-token semantic caching without PyTorch overhead:
+
+```python
+from kachedb import EmbeddingGemmaAdapter, KacheClient, SemanticCache
+
+embedder = EmbeddingGemmaAdapter(
+    model_path="/path/to/models/embeddinggemma-2",  # or set EMBEDDING_MODEL_PATH
+    dimension=384,  # 384 (default MRL slice) or 768 (native)
+)
+
+# 1. Direct encoding with asymmetric task prefixes
+query_vec = embedder.encode_query("What is an LLM?")
+doc_vec = embedder.encode_document("Large Language Models are neural networks...")
+
+# 2. Synchronous or Asynchronous Semantic Cache
+with KacheClient(host="127.0.0.1", port=6380) as client:
+    cache = SemanticCache(client=client, index_name="llm_cache", embedder=embedder)
+    cache.set("What is an LLM?", "Large Language Models are neural networks...")
+    hit = cache.get("In short explain LLM?")
+    if hit:
+        print(f"Hit ({hit.similarity:.3f}): {hit.value}")
+```
 
 ---
 

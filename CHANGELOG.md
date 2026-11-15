@@ -5,6 +5,26 @@ All notable changes to the `kachedb` Python SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] — 2026-11-15
+
+### Added
+- **Google EmbeddingGemma 2 Adapter (`EmbeddingGemmaAdapter`):**
+  - High-performance, zero-PyTorch semantic embedding adapter powered by local ONNX Runtime CPU execution (`model.onnx` + `tokenizer.json`).
+  - Matryoshka Representation Learning (MRL) dimension slicing: native 768-d sliced down to 384-d vector embeddings with strict unit $L_2$ normalization for compact, low-latency vector cache storage.
+  - Native 8,192-token context window with strict boundary enforcement (`DEFAULT_MAX_TOKENS = 8192`) rejecting out-of-context sequences.
+  - Asymmetric task prefixes (`format_task_prompt`, `EmbeddingTask`): `task: search query | text: ` for queries vs. `task: document indexing | text: ` for stored documents, with idempotent prefix detection.
+  - Multi-stage model path resolution (`resolve_model_paths`, `ModelResolutionConfig`): auto-detects local directory, environment variables (`EMBEDDING_MODEL_PATH`, `KACHEDB_MODEL_PATH`), and FastEmbed fallback cache directory (`~/.fastembed_cache`).
+  - Thread-safe ONNX CPU runtime engine with `threading.Semaphore(2)` concurrency throttling and CPU thread configuration (`intra_op_num_threads=4`).
+  - Dynamic named tensor resolution: auto-detects `sentence_embedding` or `last_hidden_state` with mean pooling and attention mask gating.
+- **Async Semantic Cache Non-Blocking Inference:**
+  - Offloaded synchronous ONNX/embedding inference in `AsyncSemanticCache.get()` and `AsyncSemanticCache.set()` to worker threads via `asyncio.to_thread` to prevent event-loop blocking.
+- **Auto-Selection Support:**
+  - Added `embeddinggemma-2` provider detection in `_auto_select_embedder()`, respecting `KACHEDB_MODEL_PATH` and `KACHEDB_EMBEDDING_DIM`.
+- **Packaging:**
+  - Added optional dependency extra `pip install "kachedb[gemma]"` requiring `onnxruntime>=1.18.0` and `tokenizers>=0.19.0`.
+
+---
+
 ## [0.3.0] — 2026-10-05
 
 ### Added
